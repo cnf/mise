@@ -87,6 +87,14 @@ or a 3D model.</p>
   </div>
 </div>
 {{end}}
+<script>
+document.querySelectorAll('[data-fs]').forEach(b=>b.addEventListener('click',()=>{
+  const w=b.closest('.ibomwrap');
+  if(document.fullscreenElement){document.exitFullscreen()}else if(w.requestFullscreen){w.requestFullscreen()}else{window.open(w.querySelector('iframe').src,'_blank','noopener')}
+}));
+document.addEventListener('fullscreenchange',()=>document.querySelectorAll('[data-fs]').forEach(b=>{
+  b.textContent=document.fullscreenElement&&document.fullscreenElement.contains(b)?'✕ Exit full screen':'⛶ Full screen'}));
+</script>
 {{template "foot" .}}{{end}}
 
 
@@ -132,7 +140,13 @@ or a 3D model.</p>
           <model-viewer class="model" src="/documents/{{$s.Document.ID}}" alt="{{$s.Title}}" camera-controls touch-action="pan-y" shadow-intensity="0.6" exposure="1.0"></model-viewer>
         {{else}}
           {{if not $edit}}<p class="muted small">▸ {{$s.Document.Filename}}</p>{{end}}
-          <iframe class="ibom" src="/documents/{{$s.Document.ID}}" sandbox="allow-scripts" loading="lazy" title="interactive board"></iframe>
+          <div class="ibomwrap">
+            <div class="ibombar">
+              <button type="button" class="ghost small" data-fs>⛶ Full screen</button>
+              <a class="small" href="/documents/{{$s.Document.ID}}" target="_blank" rel="noopener">Open in new tab ↗</a>
+            </div>
+            <iframe class="ibom" src="/documents/{{$s.Document.ID}}" sandbox="allow-scripts" loading="lazy" title="interactive board"></iframe>
+          </div>
         {{end}}
       {{else if $edit}}
         <form method="post" action="/steps/document" enctype="multipart/form-data" class="inline small">
