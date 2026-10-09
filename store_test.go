@@ -115,12 +115,11 @@ func TestIBOMDecode(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	fh, err := os.Open(f)
+	raw, err := os.ReadFile(f)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer fh.Close()
-	asmID, n, err := importIBOM(db, fh, "")
+	asmID, n, err := importIBOM(db, raw, "")
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}

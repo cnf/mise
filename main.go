@@ -357,10 +357,24 @@ func (s *server) assemblyByID(w http.ResponseWriter, r *http.Request) {
 	}
 	parts, _ := listParts(s.db, "")
 	all, _ := listAssemblies(s.db)
+	hasDoc := false
+	if ss, err := steps(s.db, id); err == nil {
+		for i := range ss {
+			if ss[i].Document != nil {
+				hasDoc = true
+				break
+			}
+		}
+	}
 	s.render(w, "assembly_view.html", map[string]any{
 		"Assembly": a, "Lines": ls, "Parts": parts, "All": all,
 		"Back": "/assemblies/" + strconv.FormatInt(id, 10),
 		"Edit": edit,
+		// the import redirect reports what happened, so the page says it rather
+		// than leaving you to infer it
+		"Imported":    r.URL.Query().Get("imported"),
+		"ImportErr":   r.URL.Query().Get("ibom_step_error"),
+		"HasDocument": hasDoc,
 	})
 }
 
@@ -764,15 +778,59 @@ func (s *server) ibomImport(w http.ResponseWriter, r *http.Request) {
 		}
 		defer f.Close()
 		name := r.FormValue("assembly_name")
-		id, n, err := importIBOM(s.db, f, name)
+		raw, err := io.ReadAll(io.LimitReader(f, maxDocumentBytes+1))
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		http.Redirect(w, r, "/assemblies/"+strconv.FormatInt(id, 10)+"?imported="+strconv.Itoa(n), http.StatusSeeOther)
+		id, n, err := importIBOM(s.db, raw, name)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		// Keep the board itself and put it on the assembly's manual, so the
+		// imported layout is viewable without a second manual upload. This is
+		// best-effort: the BOM import already succeeded, so a step that cannot
+		// be created is reported, not fatal.
+		stepNote := ""
+		if err := attachImportedIBOM(s.db, id, raw); err != nil {
+			stepNote = "&ibom_step_error=" + url.QueryEscape(err.Error())
+			log.Printf("ibom import %d: could not attach the layout to the manual: %v", id, err)
+		}
+		http.Redirect(w, r, "/assemblies/"+strconv.FormatInt(id, 10)+"?imported="+strconv.Itoa(n)+stepNote, http.StatusSeeOther)
 		return
 	}
 	s.render(w, "ibom_import.html", map[string]any{})
+}
+
+// attachImportedIBOM stores an imported board and puts it on the assembly's
+// manual as a document step, so "import an iBOM" and "see the board layout" are
+// one action instead of two. Re-importing replaces the board and does not stack
+// duplicate steps.
+func attachImportedIBOM(db *sql.DB, asmID int64, raw []byte) error {
+	existing, err := steps(db, asmID)
+	if err != nil {
+		return err
+	}
+	stepID := int64(0)
+	for i := range existing {
+		if existing[i].ItemType == "document" && existing[i].Document != nil {
+			stepID = existing[i].ID
+			break
+		}
+	}
+	if stepID == 0 {
+		stepID, err = addStep(db, &Step{
+			AssemblyID: asmID,
+			ItemType:   "document",
+			Title:      "Board layout",
+		})
+		if err != nil {
+			return err
+		}
+	}
+	_, err = addDocument(db, stepID, "board.html", raw)
+	return err
 }
 
 // ---------- manual ----------

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"regexp"
 	"strings"
 )
@@ -42,15 +41,14 @@ type ibomData struct {
 	} `json:"footprints"`
 }
 
-// importIBOM reads an ibom.html, creates (or reuses) an assembly for the board
-// and returns the assembly id plus the number of parts imported. Each distinct
-// (value, footprint) pair becomes a part; each refdes becomes a line so the
-// board expands to its true component count.
-func importIBOM(db *sql.DB, r io.Reader, name string) (int64, int, error) {
-	raw, err := io.ReadAll(io.LimitReader(r, 64<<20))
-	if err != nil {
-		return 0, 0, err
-	}
+// importIBOM decodes an ibom.html and creates (or reuses) an assembly for the
+// board, returning the assembly id plus the number of parts imported. Each
+// distinct (value, footprint) pair becomes a part; each refdes becomes a line so
+// the board expands to its true component count.
+//
+// The caller also keeps the file itself: the board layout is the reason you
+// imported it, so it belongs on the manual too (see the import handler).
+func importIBOM(db *sql.DB, raw []byte, name string) (int64, int, error) {
 	m := ibomRe.FindSubmatch(raw)
 	if m == nil {
 		return 0, 0, fmt.Errorf("no pcbdata blob found — is this an InteractiveHtmlBom file?")

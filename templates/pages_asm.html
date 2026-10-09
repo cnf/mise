@@ -32,6 +32,9 @@
 <h1>{{.Assembly.Name}}</h1>
 <p class="muted">{{.Assembly.Description}}</p>
 
+{{if .Imported}}<p class="ok small">imported {{.Imported}} components from the board.</p>{{end}}
+{{if .ImportErr}}<p class="warn small">the board was imported, but its layout could not be attached to the manual: {{.ImportErr}}</p>{{end}}
+
 <div class="modebar">
   {{if .Edit}}
     <span class="tag mode-on">editing</span>
@@ -40,7 +43,7 @@
     <a href="/assemblies/{{.Assembly.ID}}?edit=1"><button class="ghost" type="button">Edit contents</button></a>
   {{end}}
   <a href="/gather/{{.Assembly.ID}}"><button class="ghost" type="button">Gather list</button></a>
-  <a href="/manuals/{{.Assembly.ID}}"><button class="ghost" type="button">Manual</button></a>
+  <a href="/manuals/{{.Assembly.ID}}"><button class="ghost" type="button">Manual{{if .HasDocument}} &amp; board layout{{end}}</button></a>
 </div>
 
 <h2>Contents</h2>
