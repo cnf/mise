@@ -6,19 +6,29 @@
   {{if .Label}} · viewing as <b>{{.Label}}</b>{{end}}
 </p>
 
-<form class="inline" method="get" action="/manuals/{{.Assembly.ID}}">
-  <label class="muted small">preview as:</label>
-  <input name="build" value="{{.BuildQuery}}" placeholder="build id" style="width:7rem">
-  <button class="ghost">Show</button>
-  <span class="muted small">empty = this assembly's own steps, unresolved variants</span>
-</form>
+<div class="modebar">
+  {{if .Edit}}
+    <span class="tag mode-on">editing</span>
+    <a href="/manuals/{{.Assembly.ID}}{{if .BuildQuery}}?build={{.BuildQuery}}{{end}}"><button class="ghost" type="button">Done — read only</button></a>
+  {{else}}
+    <a href="/manuals/{{.Assembly.ID}}?edit=1{{if .BuildQuery}}&amp;build={{.BuildQuery}}{{end}}"><button class="ghost" type="button">Edit this manual</button></a>
+  {{end}}
+  <form class="inline" method="get" action="/manuals/{{.Assembly.ID}}" style="margin:0">
+    {{if .Edit}}<input type="hidden" name="edit" value="1">{{end}}
+    <label class="muted small">view as build:</label>
+    <input name="build" value="{{.BuildQuery}}" placeholder="build id" style="width:6rem">
+    <button class="ghost small">Show</button>
+    <span class="muted small">blank = this assembly only, variants unresolved</span>
+  </form>
+</div>
 
 {{template "manualsteps" .Manual}}
 
+{{if .Edit}}
 <h2>Add a step</h2>
 <form method="post" action="/steps/new">
   <input type="hidden" name="assembly_id" value="{{.Assembly.ID}}">
-  <input type="hidden" name="_back" value="/manuals/{{.Assembly.ID}}">
+  <input type="hidden" name="_back" value="{{.Manual.Back}}">
   <div class="row"><label>Type</label>
     <select name="item_type">
       <option value="note">note — text + photos</option>
@@ -43,12 +53,13 @@
   </div>
   <p><button>Add step</button></p>
 </form>
+{{end}}
 {{template "foot" .}}{{end}}
 
 
 {{define "manualsteps"}}
-{{if not .Steps}}<p class="muted">No steps yet.</p>{{end}}
-{{$aid := .AssemblyID}}
+{{$edit := .Edit}}{{$back := .Back}}{{$aid := .AssemblyID}}
+{{if not .Steps}}<p class="muted">No steps yet.{{if not $edit}} <a href="/manuals/{{$aid}}?edit=1">Add one.</a>{{end}}</p>{{end}}
 {{range $i, $s := .Steps}}
 <div class="step">
   <div class="stepnum">{{inc $i}}</div>
@@ -62,33 +73,39 @@
 
     {{if eq $s.ItemType "document"}}
       {{if $s.Document}}
+        {{if $edit}}
         <div class="docbar">
           <span class="muted small">▸ {{$s.Document.Filename}} · {{$s.Document.Size}} B{{if $s.Document.IsModel}} · 3D model{{end}}</span>
           <form method="post" action="/steps/document" enctype="multipart/form-data" class="inline small">
             <input type="hidden" name="step_id" value="{{$s.ID}}">
-            <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+            <input type="hidden" name="_back" value="{{$back}}">
             <input type="file" name="document" required>
             <button class="ghost small">replace</button>
           </form>
           <form method="post" action="/documents/{{$s.Document.ID}}" class="inline small">
             <input type="hidden" name="_action" value="delete">
-            <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+            <input type="hidden" name="_back" value="{{$back}}">
             <button class="danger small">detach</button>
           </form>
         </div>
+        {{end}}
         {{if $s.Document.IsModel}}
+          <p class="muted small">▸ {{$s.Document.Filename}}</p>
           <model-viewer class="model" src="/documents/{{$s.Document.ID}}" alt="{{$s.Title}}" camera-controls touch-action="pan-y" shadow-intensity="0.6" exposure="1.0"></model-viewer>
         {{else}}
+          <p class="muted small">▸ {{$s.Document.Filename}}</p>
           <iframe class="ibom" src="/documents/{{$s.Document.ID}}" sandbox="allow-scripts" loading="lazy" title="interactive board"></iframe>
         {{end}}
-      {{else}}
+      {{else if $edit}}
         <form method="post" action="/steps/document" enctype="multipart/form-data" class="inline small">
           <input type="hidden" name="step_id" value="{{$s.ID}}">
-          <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+          <input type="hidden" name="_back" value="{{$back}}">
           <input type="file" name="document" required>
           <button class="ghost small">attach board or model</button>
         </form>
         <p class="muted small">an InteractiveHtmlBom export, or a glTF binary (.glb) exported from FreeCAD</p>
+      {{else}}
+        <p class="muted small">no board or model attached yet</p>
       {{end}}
     {{end}}
 
@@ -96,11 +113,13 @@
     <figure>
       <img src="/images/{{.ID}}" alt="{{.Caption}}">
       {{if .Caption}}<figcaption class="muted small">{{.Caption}}</figcaption>{{end}}
+      {{if $edit}}
       <form method="post" action="/images/{{.ID}}">
         <input type="hidden" name="_action" value="delete">
-        <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+        <input type="hidden" name="_back" value="{{$back}}">
         <button class="danger small">remove image</button>
       </form>
+      {{end}}
     </figure>
     {{end}}
 
@@ -117,38 +136,41 @@
       <p class="muted small">(this slot resolves to a part or an unset option — nothing to follow)</p>
     {{end}}
 
-    <form method="post" action="/steps/{{$s.ID}}" class="inline small">
-      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
-      <input type="hidden" name="_action" value="up">
-      <button class="ghost small">↑</button>
-    </form>
-    <form method="post" action="/steps/{{$s.ID}}" class="inline small">
-      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
-      <input type="hidden" name="_action" value="down">
-      <button class="ghost small">↓</button>
-    </form>
-    <form method="post" action="/steps/{{$s.ID}}" class="inline small">
-      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
-      <input type="hidden" name="_action" value="delete">
-      <button class="danger small">delete</button>
-    </form>
-
-    <form method="post" action="/steps/upload" enctype="multipart/form-data" class="inline small">
-      <input type="hidden" name="step_id" value="{{$s.ID}}">
-      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
-      <input type="file" name="image" accept="image/*">
-      <input name="caption" placeholder="caption" style="width:12rem">
-      <button class="ghost small">add image</button>
-    </form>
+    {{if $edit}}
+    <div class="stepbar">
+      <form method="post" action="/steps/{{$s.ID}}" class="inline small">
+        <input type="hidden" name="_back" value="{{$back}}">
+        <input type="hidden" name="_action" value="up">
+        <button class="ghost small" title="move up">↑</button>
+      </form>
+      <form method="post" action="/steps/{{$s.ID}}" class="inline small">
+        <input type="hidden" name="_back" value="{{$back}}">
+        <input type="hidden" name="_action" value="down">
+        <button class="ghost small" title="move down">↓</button>
+      </form>
+      <form method="post" action="/steps/upload" enctype="multipart/form-data" class="inline small">
+        <input type="hidden" name="step_id" value="{{$s.ID}}">
+        <input type="hidden" name="_back" value="{{$back}}">
+        <input type="file" name="image" accept="image/*">
+        <input name="caption" placeholder="caption" style="width:12rem">
+        <button class="ghost small">add image</button>
+      </form>
+      <form method="post" action="/steps/{{$s.ID}}" class="inline small">
+        <input type="hidden" name="_back" value="{{$back}}">
+        <input type="hidden" name="_action" value="delete">
+        <button class="danger small">delete</button>
+      </form>
+    </div>
 
     {{if eq $s.ItemType "note"}}
     <form method="post" action="/steps/{{$s.ID}}" class="small">
-      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+      <input type="hidden" name="_back" value="{{$back}}">
       <input type="hidden" name="_action" value="update">
       <input name="title" value="{{$s.Title}}" placeholder="title" style="width:20rem">
       <textarea name="body">{{$s.Body}}</textarea>
       <button class="ghost small">save text</button>
     </form>
+    {{end}}
     {{end}}
   </div>
 </div>

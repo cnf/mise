@@ -1154,7 +1154,9 @@ type ResolvedMan struct {
 	AssemblyID int64
 	Title      string
 	Steps      []ResolvedStep
-	Loop       bool // reference points back up the tree; do not follow
+	Loop       bool   // reference points back up the tree; do not follow
+	Edit       bool   // render the editor rather than the read view
+	Back       string // where this manual's edit actions return to, mode included
 }
 
 // manual resolves an assembly's steps for a given selection: a slot step is
@@ -1231,6 +1233,20 @@ func resolveChild(db *sql.DB, id int64, sel Selection, path map[int64]bool, dept
 		return nil, err
 	}
 	return &ResolvedMan{AssemblyID: id, Title: a.Name, Steps: sub}, nil
+}
+
+// propagateMode pushes the render mode down the resolved tree. A sub-manual
+// reached through a reference is rendered by the same recursive template, so it
+// needs the mode and the back-link too — otherwise a nested sub-manual silently
+// renders read-only while its parent is being edited.
+func (m *ResolvedMan) propagateMode(edit bool, back string) {
+	for i := range m.Steps {
+		if ref := m.Steps[i].Reference; ref != nil {
+			ref.Edit = edit
+			ref.Back = back
+			ref.propagateMode(edit, back)
+		}
+	}
 }
 
 // HasModel reports whether the resolved manual contains an embedded 3D model

@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -234,6 +235,10 @@ func (s *server) assemblyNew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) assemblyByID(w http.ResponseWriter, r *http.Request) {
+	// Edit is opt-in. A GET is the read surface; ?edit=1 turns the same page
+	// into its editor. Without this the page was 30 form controls and nothing
+	// said which mode you were in, so there was no way to just look at it.
+	edit := r.URL.Query().Get("edit") != ""
 	pth := strings.TrimPrefix(r.URL.Path, "/assemblies/")
 	if strings.HasSuffix(pth, "/edit") {
 		id, err := strconv.ParseInt(strings.TrimSuffix(pth, "/edit"), 10, 64)
@@ -277,6 +282,15 @@ func (s *server) assemblyByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, err.Error(), 400)
+			return
+		}
+		// A read-mode action only changes which view you see.
+		if act := r.FormValue("_action"); act == "read" || act == "edit" {
+			target := "/assemblies/" + strconv.FormatInt(id, 10)
+			if act == "edit" {
+				target += "?edit=1"
+			}
+			http.Redirect(w, r, target, http.StatusSeeOther)
 			return
 		}
 		var opErr error
@@ -327,7 +341,13 @@ func (s *server) assemblyByID(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, opErr.Error(), 500)
 			return
 		}
-		http.Redirect(w, r, "/assemblies/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+		// Mutations return to the mode you were in, so editing does not bounce
+		// you out into read mode mid-task.
+		target := "/assemblies/" + strconv.FormatInt(id, 10)
+		if edit {
+			target += "?edit=1"
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
 		return
 	}
 	ls, err := lines(s.db, id)
@@ -340,6 +360,7 @@ func (s *server) assemblyByID(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "assembly_view.html", map[string]any{
 		"Assembly": a, "Lines": ls, "Parts": parts, "All": all,
 		"Back": "/assemblies/" + strconv.FormatInt(id, 10),
+		"Edit": edit,
 	})
 }
 
@@ -785,13 +806,31 @@ func (s *server) manualByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	// Read is the default; ?edit=1 is the editor. Back-links carry the mode so
+	// an edit action returns you to editing rather than dumping you into read.
+	edit := r.URL.Query().Get("edit") != ""
+	back := "/manuals/" + strconv.FormatInt(id, 10)
+	if edit {
+		back += "?edit=1"
+	}
+	if b := r.URL.Query().Get("build"); b != "" {
+		sep := "?"
+		if edit {
+			sep = "&"
+		}
+		back += sep + "build=" + url.QueryEscape(b)
+	}
+	m.Edit = edit
+	m.Back = back
+	m.propagateMode(edit, back)
 	parts, _ := listParts(s.db, "")
 	all, _ := listAssemblies(s.db)
 	slots, _ := listSlots(s.db, id)
 	s.render(w, "manual_view.html", map[string]any{
 		"Assembly": a, "Manual": m, "Parts": parts, "All": all,
 		"Slots": slots, "Label": label, "BuildQuery": r.URL.Query().Get("build"),
-		"Back":        "/assemblies/" + strconv.FormatInt(id, 10),
+		"Back":        back,
+		"Edit":        edit,
 		"NeedsViewer": m.HasModel(),
 	})
 }

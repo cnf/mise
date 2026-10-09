@@ -88,6 +88,13 @@ td form{margin:0;display:flex;gap:.3rem;align-items:center}
 model-viewer.model{width:100%;height:30rem;border:1px solid var(--line);border-radius:var(--r1);margin:.4rem 0;display:block;background:var(--bg)}
 .docbar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:.3rem 0}
 .docbar form{margin:0}
+/* A mode bar states which of the two modes a page is in. Before this, an
+   assembly view was 30 edit controls and nothing said so. */
+.modebar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;border:1px solid var(--line);border-radius:var(--r1);padding:.4rem .6rem;margin:0 0 .9rem}
+.modebar form{margin:0}
+.tag.mode-on{background:var(--acc);color:var(--on-acc);font-weight:600}
+.stepbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.3rem 0}
+.stepbar form{margin:0}
 button.small{padding:.15rem .5rem;font-size:.82rem}
 </style>
 </head><body>

@@ -80,7 +80,7 @@ func TestTemplatesParseAndRender(t *testing.T) {
 		},
 		"assembly_view.html": map[string]any{
 			"Assembly": frame, "Lines": linesOf, "Parts": parts, "All": asms,
-			"Back": "/assemblies/1",
+			"Back": "/assemblies/1", "Edit": false,
 		},
 		"builds.html": map[string]any{"Builds": builds, "Assemblies": asms, "AsmNames": map[int64]string{}},
 		"build_view.html": map[string]any{
