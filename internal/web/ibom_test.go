@@ -1,4 +1,4 @@
-package main
+package web
 
 import (
 	"encoding/json"
@@ -6,6 +6,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"example.com/cnf/mise/internal/ibom"
+	"example.com/cnf/mise/internal/store"
 )
 
 // TestImportKeepsTheBoardViewable is the fix for "there is no way to view the
@@ -17,13 +20,13 @@ func TestImportKeepsTheBoardViewable(t *testing.T) {
 	if err != nil {
 		t.Skip("no ibom.html present")
 	}
-	db, err := openDB(":memory:")
+	db, err := store.OpenDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 
-	asmID, n, err := importIBOM(db, raw, "")
+	asmID, n, err := ibom.ImportIBOM(db, raw, "")
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
@@ -35,7 +38,7 @@ func TestImportKeepsTheBoardViewable(t *testing.T) {
 	}
 
 	// the board is now reachable from the assembly's manual
-	ss, err := steps(db, asmID)
+	ss, err := store.Steps(db, asmID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +48,7 @@ func TestImportKeepsTheBoardViewable(t *testing.T) {
 	if ss[0].Document == nil {
 		t.Fatal("the document step has no board attached")
 	}
-	got, mime, err := documentBytes(db, ss[0].Document.ID)
+	got, mime, err := store.DocumentBytes(db, ss[0].Document.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,13 +60,13 @@ func TestImportKeepsTheBoardViewable(t *testing.T) {
 	}
 
 	// re-importing must replace, not stack duplicate steps
-	if _, _, err := importIBOM(db, raw, ""); err != nil {
+	if _, _, err := ibom.ImportIBOM(db, raw, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := attachImportedIBOM(db, asmID, raw); err != nil {
 		t.Fatal(err)
 	}
-	ss2, _ := steps(db, asmID)
+	ss2, _ := store.Steps(db, asmID)
 	if len(ss2) != 1 {
 		t.Errorf("re-import stacked steps: got %d, want 1", len(ss2))
 	}
@@ -83,7 +86,7 @@ func TestImportKeepsTheBoardViewable(t *testing.T) {
 // import which needs a generated ibom.html.
 func TestDecodePcbdataFixture(t *testing.T) {
 	js := loadFixtureJSON(t)
-	var d ibomData
+	var d ibom.IBOMData
 	if err := json.Unmarshal([]byte(js), &d); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -110,7 +113,7 @@ func loadFixtureJSON(t *testing.T) string {
 	if err != nil {
 		t.Skipf("fixture missing: %v", err)
 	}
-	js, err := decompressFromBase64(strings.TrimSpace(string(raw)))
+	js, err := ibom.DecompressFromBase64(strings.TrimSpace(string(raw)))
 	if err != nil {
 		t.Fatalf("decompress: %v", err)
 	}
@@ -131,7 +134,7 @@ func loadFixtureJSON(t *testing.T) string {
 // blob by wrapping the base64 payload back into the minimal shape ibomRe reads.
 func TestImportGroupsIdenticalParts(t *testing.T) {
 	js := loadFixtureJSON(t)
-	var d ibomData
+	var d ibom.IBOMData
 	if err := json.Unmarshal([]byte(js), &d); err != nil {
 		t.Fatal(err)
 	}
@@ -204,12 +207,12 @@ func importFixture(t *testing.T) (lines, components, distinct, dupNames int) {
 	}
 	fake := "pcbdata = JSON.parse(LZString.decompressFromBase64(\"" +
 		strings.TrimSpace(string(b64)) + "\"));"
-	db, err := openDB(":memory:")
+	db, err := store.OpenDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	asmID, n, err := importIBOM(db, []byte(fake), "")
+	asmID, n, err := ibom.ImportIBOM(db, []byte(fake), "")
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}

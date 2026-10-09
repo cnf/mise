@@ -76,7 +76,7 @@ keeps its rows through the upgrade.
 Everything runs through devenv (Go toolchain + sqlite):
 
 ```sh
-devenv shell --no-tui -- bash -c 'go build -o mise . && ./mise -db mise.db'
+devenv shell --no-tui -- bash -c 'go build -o mise ./cmd/mise && ./mise -db mise.db'
 ```
 
 Then open <http://localhost:8080>.
@@ -118,7 +118,7 @@ This is not something `mise` can do: FreeCAD's glTF exporter lives in the GUI
 module, so headless `freecadcmd` export is unreliable (FreeCAD issue #8610), and
 the app has no FreeCAD. Whatever the exporter writes, the app takes it.
 
-`<model-viewer>` is embedded in the binary (`assets/model-viewer.min.js`,
+`<model-viewer>` is embedded in the binary (`internal/web/assets/model-viewer.min.js`,
 Apache-2.0) and served from our own origin — no CDN at runtime. It is only loaded
 on a manual page that actually contains a model, so a manual of text and photos
 does not fetch a megabyte of JavaScript.
@@ -131,15 +131,18 @@ an iBOM named `.glb` is still served as sandboxed HTML.
 ## Layout
 
 ```
-main.go        HTTP handlers, routing, CSV export
-db.go          schema + connection
-store.go       parts, assemblies, lines, builds, the gather flatten
-partdb.go      Part-DB cache sweep + search
-ibom.go        InteractiveHtmlBom decode + assembly import
-lzstring.go    LZString.decompressFromBase64 port
-templates/     server-rendered pages (html/template)
-assets/        vendored JS embedded into the binary
+cmd/mise/          CLI entry: flags, wiring, ListenAndServe
+internal/store/    schema + connection; parts, assemblies, lines, builds, manuals
+internal/bom/      gathering and manual resolution — the read-side logic
+internal/ibom/     InteractiveHtmlBom decode (LZString port + assembly import)
+internal/partdb/   Part-DB cache sweep + search
+internal/web/      HTTP handlers, routing, CSV export, templates, assets
 ```
+
+Dependencies point one way: `web` → `bom`/`ibom`/`partdb` → `store`. Nothing in
+`store` imports a package above it. `bom` owns freezing a build's gather list
+because that is the one place both the read and the store concerns meet; putting
+it in `store` would make `store` import `bom` while `bom` already imports `store`.
 
 ## Not in this phase
 

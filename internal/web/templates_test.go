@@ -1,10 +1,13 @@
-package main
+package web
 
 import (
 	"bytes"
 	"html/template"
 	"strings"
 	"testing"
+
+	"example.com/cnf/mise/internal/bom"
+	"example.com/cnf/mise/internal/store"
 )
 
 // parseTemplates mirrors main(): the same FuncMap and the same file set. If a
@@ -14,9 +17,9 @@ import (
 func parseTemplates(t *testing.T) *template.Template {
 	t.Helper()
 	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"trimNum": trimNum,
-		"price":   func(p *float64) string { return strFmt(p) },
-		"mul":     func(p *float64, q float64) string { return mulFmt(p, q) },
+		"trimNum": TrimNum,
+		"price":   func(p *float64) string { return StrFmt(p) },
+		"mul":     func(p *float64, q float64) string { return MulFmt(p, q) },
 		"inc":     func(i int) int { return i + 1 },
 	}).ParseFS(templateFiles, "templates/*.html")
 	if err != nil {
@@ -32,47 +35,47 @@ func TestTemplatesParseAndRender(t *testing.T) {
 	tmpl := parseTemplates(t)
 
 	db, ids := mkFixture(t)
-	parts, err := listParts(db, "")
+	parts, err := store.ListParts(db, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	asms, _ := listAssemblies(db)
-	builds, _ := listBuilds(db)
-	sel := Selection{}
+	asms, _ := store.ListAssemblies(db)
+	builds, _ := store.ListBuilds(db)
+	sel := store.Selection{}
 	if err := sel.Set(db, ids["slot"], ids["optB"]); err != nil {
 		t.Fatal(err)
 	}
-	g, err := gather(db, ids["frame"], sel)
+	g, err := bom.Gather(db, ids["frame"], sel)
 	if err != nil {
 		t.Fatal(err)
 	}
 	g.Selection = sel
-	asmslots, err := slotsUnder(db, ids["frame"])
+	asmslots, err := store.SlotsUnder(db, ids["frame"])
 	if err != nil {
 		t.Fatal(err)
 	}
 	type slotView struct {
-		Slot     VariantSlot
-		Options  []Option
+		Slot     store.VariantSlot
+		Options  []store.Option
 		Selected int64
 	}
 	var views []slotView
 	for _, sl := range asmslots {
-		opts, _ := optionsForSlot(db, sl.ID)
+		opts, _ := store.OptionsForSlot(db, sl.ID)
 		v := slotView{Slot: sl, Options: opts}
 		if oid, ok := sel[sl.ID]; ok {
 			v.Selected = oid
 		}
 		views = append(views, v)
 	}
-	frame, _ := getAssembly(db, ids["frame"])
-	linesOf, _ := lines(db, ids["frame"])
+	frame, _ := store.GetAssembly(db, ids["frame"])
+	linesOf, _ := store.Lines(db, ids["frame"])
 
 	pages := map[string]any{
 		"home.html":       map[string]any{"Parts": parts, "Assemblies": asms, "Builds": builds, "PartCount": len(parts), "AsmCount": len(asms), "BuildCount": len(builds)},
 		"parts.html":      map[string]any{"Parts": parts, "Q": "", "Kinds": partKinds},
-		"part_edit.html":  map[string]any{"Part": &Part{Currency: "EUR", Kind: "other", Attrs: "{}"}, "Kinds": partKinds},
-		"part_view.html":  map[string]any{"Part": &Part{ID: 1, Name: "M4x20", Kind: "fastener", Attrs: "{}}"}, "Kinds": partKinds},
+		"part_edit.html":  map[string]any{"Part": &store.Part{Currency: "EUR", Kind: "other", Attrs: "{}"}, "Kinds": partKinds},
+		"part_view.html":  map[string]any{"Part": &store.Part{ID: 1, Name: "M4x20", Kind: "fastener", Attrs: "{}}"}, "Kinds": partKinds},
 		"assemblies.html": map[string]any{"Rows": []any{}},
 		"assembly_edit.html": map[string]any{
 			"Assembly": frame, "Parts": parts, "All": asms,
@@ -84,7 +87,7 @@ func TestTemplatesParseAndRender(t *testing.T) {
 		},
 		"builds.html": map[string]any{"Builds": builds, "Assemblies": asms, "AsmNames": map[int64]string{}},
 		"build_view.html": map[string]any{
-			"Build":  &Build{ID: 1, Name: "Club rev B", AssemblyID: ids["frame"]},
+			"Build":  &store.Build{ID: 1, Name: "Club rev B", AssemblyID: ids["frame"]},
 			"Gather": g, "Assembly": frame, "Snapshot": nil, "Frozen": nil,
 			"Sel": sel, "SlotViews": views, "Stale": false,
 		},
@@ -128,5 +131,5 @@ func TestTemplatesParseAndRender(t *testing.T) {
 }
 
 func itoa(i int64) string {
-	return trimNum(float64(i))
+	return TrimNum(float64(i))
 }

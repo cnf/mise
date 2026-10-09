@@ -1,4 +1,4 @@
-package main
+package ibom
 
 import (
 	"database/sql"
@@ -6,24 +6,13 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"example.com/cnf/mise/internal/store"
 )
 
-// iBOM import. KiCad's InteractiveHtmlBom embeds an LZString-compressed,
-// base64-encoded JSON blob named `pcbdata` that holds the metadata, the BOM
-// (refdes -> value/footprint groups) and per-footprint on-board geometry. We
-// decode that directly rather than parsing the rendered HTML: it is the
-// authoritative machine-readable form and needs no headless browser.
-//
-// Verified field shapes (iBOM v2.11.2):
-//   pcbdata.metadata    {title, revision, company, date, variant}
-//   pcbdata.bom.fields  {"20": ["AP2112K-3.3","SOT-23-5"], ...}
-//   pcbdata.bom.both    [[[refdes, fieldIndex], ...], ...]   (groups of equal lines)
-//   pcbdata.bom.skipped [fieldIndex, ...]                    (DNP / not-populated)
-//   pcbdata.footprints  [{ref, bbox:{pos:[x,y],angle}, layer, pads, ...}, ...]
+var IbomRe = regexp.MustCompile(`pcbdata\s*=\s*JSON\.parse\(LZString\.decompressFromBase64\("([^"]+)"\)`)
 
-var ibomRe = regexp.MustCompile(`pcbdata\s*=\s*JSON\.parse\(LZString\.decompressFromBase64\("([^"]+)"\)`)
-
-type ibomData struct {
+type IBOMData struct {
 	Metadata struct {
 		Title    string `json:"title"`
 		Revision string `json:"revision"`
@@ -41,7 +30,7 @@ type ibomData struct {
 	} `json:"footprints"`
 }
 
-// importIBOM decodes an ibom.html and creates (or reuses) an assembly for the
+// ImportIBOM decodes an ibom.html and creates (or reuses) an assembly for the
 // board, returning the assembly id plus the number of components imported.
 // Components that share a value and footprint become ONE part and ONE line with
 // an aggregated count and the designators as its note (e.g. "C3, C4, C19"),
@@ -49,16 +38,16 @@ type ibomData struct {
 //
 // The caller also keeps the file itself: the board layout is the reason you
 // imported it, so it belongs on the manual too (see the import handler).
-func importIBOM(db *sql.DB, raw []byte, name string) (int64, int, error) {
-	m := ibomRe.FindSubmatch(raw)
+func ImportIBOM(db *sql.DB, raw []byte, name string) (int64, int, error) {
+	m := IbomRe.FindSubmatch(raw)
 	if m == nil {
 		return 0, 0, fmt.Errorf("no pcbdata blob found — is this an InteractiveHtmlBom file?")
 	}
-	js, err := decompressFromBase64(string(m[1]))
+	js, err := DecompressFromBase64(string(m[1]))
 	if err != nil {
 		return 0, 0, fmt.Errorf("decompress pcbdata: %w", err)
 	}
-	var data ibomData
+	var data IBOMData
 	if err := json.Unmarshal([]byte(js), &data); err != nil {
 		return 0, 0, fmt.Errorf("parse pcbdata: %w", err)
 	}
@@ -99,7 +88,7 @@ func importIBOM(db *sql.DB, raw []byte, name string) (int64, int, error) {
 		skipped[s] = true
 	}
 
-	// bom.both already groups components that share a value and footprint: each
+	// bom.Both already groups components that share a value and footprint: each
 	// group is a slice of [refdes, fieldIndex] pairs (e.g. [[C3,1],[C4,50],
 	// [C19,22]] is one 1µF part placed three times). Walk the groups and emit
 	// one line per group — do NOT key by field index, because several field
@@ -154,7 +143,7 @@ func importIBOM(db *sql.DB, raw []byte, name string) (int64, int, error) {
 		if pname == "" {
 			pname = "board part " + fmt.Sprintf("%d", fi)
 		}
-		pid, err := upsertPartTx(tx, &Part{
+		pid, err := upsertPartTx(tx, &store.Part{
 			Name:        pname,
 			Kind:        "electronic",
 			Description: footprint,
@@ -176,7 +165,7 @@ func importIBOM(db *sql.DB, raw []byte, name string) (int64, int, error) {
 	return asmID, imported, nil
 }
 
-func upsertPartTx(tx *sql.Tx, p *Part) (int64, error) {
+func upsertPartTx(tx *sql.Tx, p *store.Part) (int64, error) {
 	var id int64
 	err := tx.QueryRow(`SELECT id FROM part WHERE name=?`, p.Name).Scan(&id)
 	if err == nil {
@@ -199,4 +188,13 @@ func mustJSON(v any) string {
 		return "{}"
 	}
 	return string(b)
+}
+
+// orDefault returns s, or d when s is blank. Local to this package: the same
+// four-line helper exists in web, and sharing it is not worth a dependency.
+func orDefault(s, d string) string {
+	if strings.TrimSpace(s) == "" {
+		return d
+	}
+	return s
 }

@@ -1,10 +1,13 @@
-package main
+package web
 
 import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"testing"
+
+	"example.com/cnf/mise/internal/bom"
+	"example.com/cnf/mise/internal/store"
 )
 
 // mkGLB builds a real, minimal but valid glTF binary: the JSON chunk holds an
@@ -49,11 +52,11 @@ func mkGLB(t *testing.T) []byte {
 
 func TestGLBSniffing(t *testing.T) {
 	glb := mkGLB(t)
-	if mime, ok := sniffDocument(glb); !ok || mime != "model/gltf-binary" {
+	if mime, ok := store.SniffDocument(glb); !ok || mime != "model/gltf-binary" {
 		t.Fatalf("a real GLB should sniff as model/gltf-binary, got %q ok=%v", mime, ok)
 	}
 	// a GLB is accepted on content, not on filename
-	if _, ok := sniffDocument(glb); !ok {
+	if _, ok := store.SniffDocument(glb); !ok {
 		t.Fatal("sanity: the generated GLB should sniff")
 	}
 
@@ -66,14 +69,14 @@ func TestGLBSniffing(t *testing.T) {
 		"short":          []byte("glTF\x02\x00"),
 	}
 	for name, data := range cases {
-		if _, ok := sniffDocument(data); ok {
+		if _, ok := store.SniffDocument(data); ok {
 			t.Errorf("%s should not be accepted as a renderable asset", name)
 		}
 	}
 
 	// an iBOM still sniffs as HTML, not as a model
 	ibom := []byte(`<script>var pcbdata = JSON.parse(LZString.decompressFromBase64("x"));</script>`)
-	if mime, ok := sniffDocument(ibom); !ok || mime != "text/html; charset=utf-8" {
+	if mime, ok := store.SniffDocument(ibom); !ok || mime != "text/html; charset=utf-8" {
 		t.Errorf("iBOM should sniff as text/html, got %q ok=%v", mime, ok)
 	}
 }
@@ -83,16 +86,16 @@ func TestGLBSniffing(t *testing.T) {
 // model, and makes the manual ask for the viewer.
 func TestGLBStep(t *testing.T) {
 	db, ids := mkFixture(t)
-	stepID, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "document", Title: "Frame model"})
+	stepID, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "document", Title: "Frame model"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	glb := mkGLB(t)
-	id, err := addDocument(db, stepID, "frame.glb", glb)
+	id, err := store.AddDocument(db, stepID, "frame.glb", glb)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, mime, err := documentBytes(db, id)
+	got, mime, err := store.DocumentBytes(db, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +105,7 @@ func TestGLBStep(t *testing.T) {
 	if mime != "model/gltf-binary" {
 		t.Errorf("served mime = %q, want model/gltf-binary", mime)
 	}
-	d, err := stepDocument(db, stepID)
+	d, err := store.StepDocument(db, stepID)
 	if err != nil || d == nil {
 		t.Fatal(err)
 	}
@@ -110,7 +113,7 @@ func TestGLBStep(t *testing.T) {
 		t.Error("a glTF document must report IsModel()")
 	}
 
-	m, err := manual(db, ids["frame"], nil)
+	m, err := bom.Manual(db, ids["frame"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,10 +123,10 @@ func TestGLBStep(t *testing.T) {
 
 	// a manual with only text and photos must NOT ask for the viewer
 	db2, ids2 := mkFixture(t)
-	if _, err := addStep(db2, &Step{AssemblyID: ids2["frame"], ItemType: "note", Title: "only text"}); err != nil {
+	if _, err := store.AddStep(db2, &store.Step{AssemblyID: ids2["frame"], ItemType: "note", Title: "only text"}); err != nil {
 		t.Fatal(err)
 	}
-	m2, err := manual(db2, ids2["frame"], nil)
+	m2, err := bom.Manual(db2, ids2["frame"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,20 +139,20 @@ func TestGLBStep(t *testing.T) {
 // replaced by a model and back, leaving exactly one asset each time.
 func TestGLBReplacesIBOMAndViceVersa(t *testing.T) {
 	db, ids := mkFixture(t)
-	stepID, _ := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "document", Title: "asset"})
+	stepID, _ := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "document", Title: "asset"})
 	board := []byte(`<script>var pcbdata = JSON.parse(LZString.decompressFromBase64("x"));</script>`)
-	if _, err := addDocument(db, stepID, "b.html", board); err != nil {
+	if _, err := store.AddDocument(db, stepID, "b.html", board); err != nil {
 		t.Fatal(err)
 	}
-	if d, _ := stepDocument(db, stepID); d == nil || d.IsModel() {
+	if d, _ := store.StepDocument(db, stepID); d == nil || d.IsModel() {
 		t.Fatal("step should hold a board, not a model")
 	}
 	// the standard special case: a GLB legitimately starts with a CRC equal to the
 	// iBOM magic length; the sniffer must not confuse the two
-	if _, err := addDocument(db, stepID, "m.glb", mkGLB(t)); err != nil {
+	if _, err := store.AddDocument(db, stepID, "m.glb", mkGLB(t)); err != nil {
 		t.Fatal(err)
 	}
-	if d, _ := stepDocument(db, stepID); d == nil || !d.IsModel() {
+	if d, _ := store.StepDocument(db, stepID); d == nil || !d.IsModel() {
 		t.Fatal("step should now hold a model")
 	}
 	var n int

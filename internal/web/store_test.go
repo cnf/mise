@@ -1,30 +1,34 @@
-package main
+package web
 
 import (
 	"os"
 	"strings"
 	"testing"
+
+	"example.com/cnf/mise/internal/bom"
+	"example.com/cnf/mise/internal/ibom"
+	"example.com/cnf/mise/internal/store"
 )
 
 // TestGatherRollup checks the flatten: quantity multiplication through
 // sub-assemblies, grouping by declaring sub-assembly, DNP exclusion, and
 // shared-part summation.
 func TestGatherRollup(t *testing.T) {
-	db, err := openDB(":memory:")
+	db, err := store.OpenDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 
 	mkPart := func(name, kind string) int64 {
-		id, err := upsertPart(db, &Part{Name: name, Kind: kind, Attrs: "{}"})
+		id, err := store.UpsertPart(db, &store.Part{Name: name, Kind: kind, Attrs: "{}"})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return id
 	}
 	mkAsm := func(name string) int64 {
-		id, err := upsertAssembly(db, &Assembly{Name: name})
+		id, err := store.UpsertAssembly(db, &store.Assembly{Name: name})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -36,23 +40,23 @@ func TestGatherRollup(t *testing.T) {
 
 	// child: 4 bolts
 	child := mkAsm("Bracket")
-	if _, err := addLine(db, &Line{AssemblyID: child, ItemType: "part", PartID: &bolt, Qty: 4}); err != nil {
+	if _, err := store.AddLine(db, &store.Line{AssemblyID: child, ItemType: "part", PartID: &bolt, Qty: 4}); err != nil {
 		t.Fatal(err)
 	}
 
 	// root: 2x child, 8 nuts, and 1 DNP bolt line
 	root := mkAsm("Frame")
-	if _, err := addLine(db, &Line{AssemblyID: root, ItemType: "assembly", ChildAssemblyID: &child, Qty: 2}); err != nil {
+	if _, err := store.AddLine(db, &store.Line{AssemblyID: root, ItemType: "assembly", ChildAssemblyID: &child, Qty: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addLine(db, &Line{AssemblyID: root, ItemType: "part", PartID: &nut, Qty: 8}); err != nil {
+	if _, err := store.AddLine(db, &store.Line{AssemblyID: root, ItemType: "part", PartID: &nut, Qty: 8}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addLine(db, &Line{AssemblyID: root, ItemType: "part", PartID: &bolt, Qty: 99, DNP: true}); err != nil {
+	if _, err := store.AddLine(db, &store.Line{AssemblyID: root, ItemType: "part", PartID: &bolt, Qty: 99, DNP: true}); err != nil {
 		t.Fatal(err)
 	}
 
-	g, err := gather(db, root, nil)
+	g, err := bom.Gather(db, root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,24 +85,24 @@ func TestGatherRollup(t *testing.T) {
 }
 
 func TestCycleGuard(t *testing.T) {
-	db, err := openDB(":memory:")
+	db, err := store.OpenDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	a, _ := upsertAssembly(db, &Assembly{Name: "A"})
-	b, _ := upsertAssembly(db, &Assembly{Name: "B"})
-	if err := wouldCycle(db, a, b); err != nil {
+	a, _ := store.UpsertAssembly(db, &store.Assembly{Name: "A"})
+	b, _ := store.UpsertAssembly(db, &store.Assembly{Name: "B"})
+	if err := store.WouldCycle(db, a, b); err != nil {
 		t.Fatalf("A->B should be allowed: %v", err)
 	}
 	// make B a child of A, then A can no longer be added under B
-	if _, err := addLine(db, &Line{AssemblyID: a, ItemType: "assembly", ChildAssemblyID: &b, Qty: 1}); err != nil {
+	if _, err := store.AddLine(db, &store.Line{AssemblyID: a, ItemType: "assembly", ChildAssemblyID: &b, Qty: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if err := wouldCycle(db, b, a); err == nil {
+	if err := store.WouldCycle(db, b, a); err == nil {
 		t.Fatal("B->A must be rejected as a cycle")
 	}
-	if err := wouldCycle(db, a, a); err == nil {
+	if err := store.WouldCycle(db, a, a); err == nil {
 		t.Fatal("self-reference must be rejected")
 	}
 }
@@ -110,7 +114,7 @@ func TestIBOMDecode(t *testing.T) {
 	if _, err := os.Stat(f); err != nil {
 		t.Skip("no ibom.html present")
 	}
-	db, err := openDB(":memory:")
+	db, err := store.OpenDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,21 +123,21 @@ func TestIBOMDecode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	asmID, n, err := importIBOM(db, raw, "")
+	asmID, n, err := ibom.ImportIBOM(db, raw, "")
 	if err != nil {
 		t.Fatalf("import: %v", err)
 	}
 	if n == 0 {
 		t.Fatal("imported zero components")
 	}
-	a, err := getAssembly(db, asmID)
+	a, err := store.GetAssembly(db, asmID)
 	if err != nil || a == nil {
 		t.Fatalf("assembly not created: %v", err)
 	}
 	if !strings.Contains(a.Name, "FunShoot") {
 		t.Errorf("assembly name %q should carry the board title", a.Name)
 	}
-	ls, err := lines(db, asmID)
+	ls, err := store.Lines(db, asmID)
 	if err != nil {
 		t.Fatal(err)
 	}

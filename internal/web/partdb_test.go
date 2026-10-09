@@ -1,8 +1,10 @@
-package main
+package web
 
 import (
 	"encoding/json"
 	"testing"
+
+	"example.com/cnf/mise/internal/partdb"
 )
 
 // TestProviderReferenceShapes guards a real API quirk: providerReference comes
@@ -10,7 +12,7 @@ import (
 // for parts with several. Decoding it as one object aborts the whole sweep.
 func TestProviderReferenceShapes(t *testing.T) {
 	one := `{"id":1,"name":"BD139","providerReference":{"provider_key":"lcsc","provider_id":"C27866"}}`
-	var p pdbPart
+	var p partdb.PdbPart
 	if err := json.Unmarshal([]byte(one), &p); err != nil {
 		t.Fatalf("single object form: %v", err)
 	}
@@ -19,7 +21,7 @@ func TestProviderReferenceShapes(t *testing.T) {
 	}
 
 	many := `{"id":2,"name":"X","providerReference":[{"provider_key":"mouser"},{"provider_key":"digikey"}]}`
-	var q pdbPart
+	var q partdb.PdbPart
 	if err := json.Unmarshal([]byte(many), &q); err != nil {
 		t.Fatalf("array form: %v", err)
 	}
@@ -28,7 +30,7 @@ func TestProviderReferenceShapes(t *testing.T) {
 	}
 
 	none := `{"id":3,"name":"Y","providerReference":null}`
-	var r pdbPart
+	var r partdb.PdbPart
 	if err := json.Unmarshal([]byte(none), &r); err != nil {
 		t.Fatalf("null form: %v", err)
 	}

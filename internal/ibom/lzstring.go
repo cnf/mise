@@ -1,28 +1,13 @@
-package main
+package ibom
 
 import (
 	"fmt"
 	"strings"
 )
 
-// LZString.decompressFromBase64, ported faithfully from the implementation that
-// ships inside every InteractiveHtmlBom file. Only the decompress path is
-// needed.
-//
-// Two details are load-bearing and easy to get wrong:
-//   - the bit reader consumes the least-significant bit first and walks the
-//     index stream, resetting the bit mask to 32 and pulling the next index at
-//     each refill;
-//   - base64 is LZString's own alphabet (A-Za-z0-9+/), mapped character by
-//     character, NOT standard base64 — so it is not run through
-//     encoding/base64, which rejects unpadded and index-64 ('=') input.
-//
-// If upstream ever changes the encoding, port the matching routine rather than
-// patching this one.
-
 const lzAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
 
-func decompressFromBase64(input string) (string, error) {
+func DecompressFromBase64(input string) (string, error) {
 	if input == "" {
 		return "", nil
 	}

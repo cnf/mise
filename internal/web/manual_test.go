@@ -1,9 +1,12 @@
-package main
+package web
 
 import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"example.com/cnf/mise/internal/bom"
+	"example.com/cnf/mise/internal/store"
 )
 
 func tick() []byte { return []byte{0x89, 'P', 'N', 'G', 1, 2, 3, 4} }
@@ -16,22 +19,22 @@ func p(v int64) *int64 { return &v }
 func TestManualFollowsSubAssembly(t *testing.T) {
 	db, ids := mkFixture(t)
 	// a note on the carrier, which Frame's manual will follow
-	noteID, err := addStep(db, &Step{AssemblyID: ids["carrier"], ItemType: "note", Title: "bolt it down", Body: "4x M4"})
+	noteID, err := store.AddStep(db, &store.Step{AssemblyID: ids["carrier"], ItemType: "note", Title: "bolt it down", Body: "4x M4"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addImage(db, noteID, "a.png", "image/png", tick(), "torqued"); err != nil {
+	if _, err := store.AddImage(db, noteID, "a.png", "image/png", tick(), "torqued"); err != nil {
 		t.Fatal(err)
 	}
 	// Frame follows the carrier
-	if _, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "note", Title: "unpack"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "note", Title: "unpack"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"]), Title: "build carrier"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"]), Title: "build carrier"}); err != nil {
 		t.Fatal(err)
 	}
 
-	m, err := manual(db, ids["frame"], nil)
+	m, err := bom.Manual(db, ids["frame"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,19 +62,19 @@ func TestManualFollowsSubAssembly(t *testing.T) {
 func TestManualSlotFollowsChosenOption(t *testing.T) {
 	db, ids := mkFixture(t)
 	// give each PCB revision its own manual step
-	if _, err := addStep(db, &Step{AssemblyID: ids["pcbA"], ItemType: "note", Title: "rev A: solder the SMD header"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["pcbA"], ItemType: "note", Title: "rev A: solder the SMD header"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addStep(db, &Step{AssemblyID: ids["pcbB"], ItemType: "note", Title: "rev B: fit the standoffs first"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["pcbB"], ItemType: "note", Title: "rev B: fit the standoffs first"}); err != nil {
 		t.Fatal(err)
 	}
 	// Carrier's manual just defers to the PCB slot
-	if _, err := addStep(db, &Step{AssemblyID: ids["carrier"], ItemType: "slot", SlotID: p(ids["slot"]), Title: "the board"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["carrier"], ItemType: "slot", SlotID: p(ids["slot"]), Title: "the board"}); err != nil {
 		t.Fatal(err)
 	}
 
 	// default (rev A)
-	m, err := manual(db, ids["carrier"], nil)
+	m, err := bom.Manual(db, ids["carrier"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,11 +86,11 @@ func TestManualSlotFollowsChosenOption(t *testing.T) {
 	}
 
 	// explicit rev B
-	sel := Selection{}
+	sel := store.Selection{}
 	if err := sel.Set(db, ids["slot"], ids["optB"]); err != nil {
 		t.Fatal(err)
 	}
-	m2, err := manual(db, ids["carrier"], sel)
+	m2, err := bom.Manual(db, ids["carrier"], sel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,13 +107,13 @@ func TestManualSlotFollowsChosenOption(t *testing.T) {
 func TestManualLoopGuard(t *testing.T) {
 	db, ids := mkFixture(t)
 	// carrier's manual follows frame; frame's manual follows carrier.
-	if _, err := addStep(db, &Step{AssemblyID: ids["carrier"], ItemType: "assembly", ChildAssemblyID: p(ids["frame"]), Title: "wrap up"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["carrier"], ItemType: "assembly", ChildAssemblyID: p(ids["frame"]), Title: "wrap up"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"]), Title: "build carrier"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"]), Title: "build carrier"}); err != nil {
 		t.Fatal(err)
 	}
-	m, err := manual(db, ids["frame"], nil)
+	m, err := bom.Manual(db, ids["frame"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,22 +133,22 @@ func TestManualLoopGuard(t *testing.T) {
 // TestStepReorder checks the up/down swap, including the no-op at the ends.
 func TestStepReorder(t *testing.T) {
 	db, ids := mkFixture(t)
-	a, _ := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "note", Title: "first"})
-	b, _ := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "note", Title: "second"})
+	a, _ := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "note", Title: "first"})
+	b, _ := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "note", Title: "second"})
 
-	if err := moveStep(db, b, -1); err != nil {
+	if err := store.MoveStep(db, b, -1); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := steps(db, ids["frame"])
+	got, _ := store.Steps(db, ids["frame"])
 	if got[0].Title != "second" || got[1].Title != "first" {
 		t.Fatalf("after moving second up: %q, %q", got[0].Title, got[1].Title)
 	}
 	// already first: moving up again is a no-op, not an error
-	if err := moveStep(db, got[0].ID, -1); err != nil {
+	if err := store.MoveStep(db, got[0].ID, -1); err != nil {
 		t.Fatalf("moving the first step up should be a no-op, got %v", err)
 	}
 	// moving the last step down is a no-op too
-	if err := moveStep(db, got[1].ID, 1); err != nil {
+	if err := store.MoveStep(db, got[1].ID, 1); err != nil {
 		t.Fatalf("moving the last step down should be a no-op, got %v", err)
 	}
 	_ = a
@@ -155,24 +158,24 @@ func TestStepReorder(t *testing.T) {
 // back out byte-for-byte.
 func TestImageValidation(t *testing.T) {
 	db, ids := mkFixture(t)
-	stepID, _ := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "note", Title: "x"})
+	stepID, _ := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "note", Title: "x"})
 
-	if _, err := addImage(db, stepID, "x.svg", "image/svg+xml", tick(), ""); err == nil {
+	if _, err := store.AddImage(db, stepID, "x.svg", "image/svg+xml", tick(), ""); err == nil {
 		t.Error("svg should be rejected (it can carry script)")
 	}
-	if _, err := addImage(db, stepID, "e.png", "image/png", nil, ""); err == nil {
+	if _, err := store.AddImage(db, stepID, "e.png", "image/png", nil, ""); err == nil {
 		t.Error("empty file should be rejected")
 	}
-	big := make([]byte, maxImageBytes+1)
-	if _, err := addImage(db, stepID, "big.png", "image/png", big, ""); err == nil {
+	big := make([]byte, store.MaxImageBytes+1)
+	if _, err := store.AddImage(db, stepID, "big.png", "image/png", big, ""); err == nil {
 		t.Error("oversized image should be rejected")
 	}
 
-	id, err := addImage(db, stepID, "ok.png", "image/png", tick(), "note")
+	id, err := store.AddImage(db, stepID, "ok.png", "image/png", tick(), "note")
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, mime, err := imageBytes(db, id)
+	got, mime, err := store.ImageBytes(db, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,19 +188,19 @@ func TestImageValidation(t *testing.T) {
 // cannot be deleted out from under it with a raw foreign-key error.
 func TestDeleteGuardsForManual(t *testing.T) {
 	db, ids := mkFixture(t)
-	if _, err := addStep(db, &Step{AssemblyID: ids["carrier"], ItemType: "slot", SlotID: p(ids["slot"])}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["carrier"], ItemType: "slot", SlotID: p(ids["slot"])}); err != nil {
 		t.Fatal(err)
 	}
-	if err := deleteSlot(db, ids["slot"]); err == nil {
+	if err := store.DeleteSlot(db, ids["slot"]); err == nil {
 		t.Error("deleting a slot referenced by a manual step should be refused")
 	}
-	if err := deleteAssembly(db, ids["pcbA"]); err == nil {
+	if err := store.DeleteAssembly(db, ids["pcbA"]); err == nil {
 		t.Error("deleting an assembly that is a variant option target should be refused")
 	}
-	if _, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"])}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"])}); err != nil {
 		t.Fatal(err)
 	}
-	if err := deleteAssembly(db, ids["carrier"]); err == nil {
+	if err := store.DeleteAssembly(db, ids["carrier"]); err == nil {
 		t.Error("deleting an assembly referenced by a manual step should be refused")
 	}
 }
@@ -207,29 +210,29 @@ func TestDeleteGuardsForManual(t *testing.T) {
 // not an InteractiveHtmlBom export.
 func TestDocumentStep(t *testing.T) {
 	db, ids := mkFixture(t)
-	stepID, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "document", Title: "the board"})
+	stepID, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "document", Title: "the board"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// a note step does not get a document attached by stepDocument
-	if d, err := stepDocument(db, stepID); err != nil || d != nil {
+	if d, err := store.StepDocument(db, stepID); err != nil || d != nil {
 		t.Fatalf("a fresh document step should have no document: %v %v", d, err)
 	}
 
 	// refuse a file that is not an iBOM
-	if _, err := addDocument(db, stepID, "not.html", []byte("<html>hi</html>")); err == nil {
+	if _, err := store.AddDocument(db, stepID, "not.html", []byte("<html>hi</html>")); err == nil {
 		t.Error("a non-iBOM file should be refused")
 	}
-	if _, err := addDocument(db, stepID, "empty.html", nil); err == nil {
+	if _, err := store.AddDocument(db, stepID, "empty.html", nil); err == nil {
 		t.Error("an empty file should be refused")
 	}
 
 	fake := []byte(`<html><script>var pcbdata = JSON.parse(LZString.decompressFromBase64("AAA"));</script></html>`)
-	id, err := addDocument(db, stepID, "board.html", fake)
+	id, err := store.AddDocument(db, stepID, "board.html", fake)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, mime, err := documentBytes(db, id)
+	got, mime, err := store.DocumentBytes(db, id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +242,7 @@ func TestDocumentStep(t *testing.T) {
 	if mime != "text/html; charset=utf-8" {
 		t.Errorf("iBOM mime = %q, want text/html", mime)
 	}
-	if d, _ := stepDocument(db, stepID); d == nil || d.Filename != "board.html" || d.Size != int64(len(fake)) {
+	if d, _ := store.StepDocument(db, stepID); d == nil || d.Filename != "board.html" || d.Size != int64(len(fake)) {
 		t.Fatalf("stepDocument metadata wrong: %+v", d)
 	}
 
@@ -247,7 +250,7 @@ func TestDocumentStep(t *testing.T) {
 	// the rowid after a delete (no AUTOINCREMENT), so assert on the content and
 	// the count, not on the id changing.
 	fake2 := []byte(`<html><script>var pcbdata = JSON.parse(LZString.decompressFromBase64("BBB"));</script></html>`)
-	id2, err := addDocument(db, stepID, "board2.html", fake2)
+	id2, err := store.AddDocument(db, stepID, "board2.html", fake2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,10 +261,10 @@ func TestDocumentStep(t *testing.T) {
 	if count != 1 {
 		t.Errorf("re-upload should leave one document, got %d", count)
 	}
-	if d, _ := stepDocument(db, stepID); d == nil || d.ID != id2 || d.Filename != "board2.html" {
+	if d, _ := store.StepDocument(db, stepID); d == nil || d.ID != id2 || d.Filename != "board2.html" {
 		t.Errorf("step should now point at the replacement, got %+v", d)
 	}
-	got2, _, err := documentBytes(db, id2)
+	got2, _, err := store.DocumentBytes(db, id2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,10 +272,10 @@ func TestDocumentStep(t *testing.T) {
 		t.Error("the replacement document's bytes are wrong")
 	}
 	// deleting the step cascades to its document
-	if err := deleteStep(db, stepID); err != nil {
+	if err := store.DeleteStep(db, stepID); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := documentBytes(db, id2); err == nil {
+	if _, _, err := store.DocumentBytes(db, id2); err == nil {
 		t.Error("deleting the step should cascade to its document")
 	}
 }
@@ -282,33 +285,33 @@ func TestDocumentStep(t *testing.T) {
 func TestManualTemplatesRender(t *testing.T) {
 	tmpl := parseTemplates(t)
 	db, ids := mkFixture(t)
-	noteID, _ := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "note", Title: "hello", Body: "line1\nline2"})
-	if _, err := addImage(db, noteID, "p.png", "image/png", tick(), "cap"); err != nil {
+	noteID, _ := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "note", Title: "hello", Body: "line1\nline2"})
+	if _, err := store.AddImage(db, noteID, "p.png", "image/png", tick(), "cap"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"]), Title: "carrier"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"]), Title: "carrier"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "slot", SlotID: p(ids["slot"]), Title: "board"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "slot", SlotID: p(ids["slot"]), Title: "board"}); err != nil {
 		t.Fatal(err)
 	}
-	docStep, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "document", Title: "the board"})
+	docStep, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "document", Title: "the board"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	fake := []byte(`<html><script>var pcbdata = JSON.parse(LZString.decompressFromBase64("AAA"));</script></html>`)
-	if _, err := addDocument(db, docStep, "board.html", fake); err != nil {
+	if _, err := store.AddDocument(db, docStep, "board.html", fake); err != nil {
 		t.Fatal(err)
 	}
 
-	m, err := manual(db, ids["frame"], nil)
+	m, err := bom.Manual(db, ids["frame"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	a, _ := getAssembly(db, ids["frame"])
-	asms, _ := listAssemblies(db)
-	parts, _ := listParts(db, "")
-	slots, _ := listSlots(db, ids["frame"])
+	a, _ := store.GetAssembly(db, ids["frame"])
+	asms, _ := store.ListAssemblies(db)
+	parts, _ := store.ListParts(db, "")
+	slots, _ := store.ListSlots(db, ids["frame"])
 
 	var buf bytes.Buffer
 	data := map[string]any{

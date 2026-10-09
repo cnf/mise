@@ -1,9 +1,12 @@
-package main
+package web
 
 import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"example.com/cnf/mise/internal/bom"
+	"example.com/cnf/mise/internal/store"
 )
 
 // Read mode is the default; edit mode is opt-in (?edit=1). This is the rule the
@@ -16,10 +19,10 @@ import (
 func TestAssemblyReadModeHasNoEditControls(t *testing.T) {
 	tmpl := parseTemplates(t)
 	db, ids := mkFixture(t)
-	a, _ := getAssembly(db, ids["frame"])
-	ls, _ := lines(db, ids["frame"])
-	parts, _ := listParts(db, "")
-	asms, _ := listAssemblies(db)
+	a, _ := store.GetAssembly(db, ids["frame"])
+	ls, _ := store.Lines(db, ids["frame"])
+	parts, _ := store.ListParts(db, "")
+	asms, _ := store.ListAssemblies(db)
 
 	var buf bytes.Buffer
 	data := map[string]any{
@@ -50,10 +53,10 @@ func TestAssemblyReadModeHasNoEditControls(t *testing.T) {
 func TestAssemblyEditModeHasEditControls(t *testing.T) {
 	tmpl := parseTemplates(t)
 	db, ids := mkFixture(t)
-	a, _ := getAssembly(db, ids["frame"])
-	ls, _ := lines(db, ids["frame"])
-	parts, _ := listParts(db, "")
-	asms, _ := listAssemblies(db)
+	a, _ := store.GetAssembly(db, ids["frame"])
+	ls, _ := store.Lines(db, ids["frame"])
+	parts, _ := store.ListParts(db, "")
+	asms, _ := store.ListAssemblies(db)
 
 	var buf bytes.Buffer
 	data := map[string]any{
@@ -81,8 +84,8 @@ func TestAssemblyEditModeHasEditControls(t *testing.T) {
 func TestManualReadModeHasNoEditControls(t *testing.T) {
 	tmpl := parseTemplates(t)
 	db, ids := mkFixture(t)
-	noteID, _ := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "note", Title: "hello", Body: "text"})
-	if _, err := addImage(db, noteID, "p.png", "image/png", tick(), "cap"); err != nil {
+	noteID, _ := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "note", Title: "hello", Body: "text"})
+	if _, err := store.AddImage(db, noteID, "p.png", "image/png", tick(), "cap"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,17 +93,17 @@ func TestManualReadModeHasNoEditControls(t *testing.T) {
 		name string
 		edit bool
 	}{{"read", false}, {"edit", true}} {
-		m, err := manual(db, ids["frame"], nil)
+		m, err := bom.Manual(db, ids["frame"], nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		m.Edit = tc.edit
 		m.Back = "/manuals/1"
-		m.propagateMode(tc.edit, m.Back)
-		a, _ := getAssembly(db, ids["frame"])
-		asms, _ := listAssemblies(db)
-		parts, _ := listParts(db, "")
-		slots, _ := listSlots(db, ids["frame"])
+		m.PropagateMode(tc.edit, m.Back)
+		a, _ := store.GetAssembly(db, ids["frame"])
+		asms, _ := store.ListAssemblies(db)
+		parts, _ := store.ListParts(db, "")
+		slots, _ := store.ListSlots(db, ids["frame"])
 
 		var buf bytes.Buffer
 		data := map[string]any{
@@ -138,19 +141,19 @@ func TestManualReadModeHasNoEditControls(t *testing.T) {
 // renders read-only while its parent is being edited.
 func TestPropagateModeReachesSubManuals(t *testing.T) {
 	db, ids := mkFixture(t)
-	if _, err := addStep(db, &Step{AssemblyID: ids["carrier"], ItemType: "note", Title: "inner"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["carrier"], ItemType: "note", Title: "inner"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"])}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: p(ids["carrier"])}); err != nil {
 		t.Fatal(err)
 	}
-	m, err := manual(db, ids["frame"], nil)
+	m, err := bom.Manual(db, ids["frame"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	m.Edit = true
 	m.Back = "/manuals/1?edit=1"
-	m.propagateMode(m.Edit, m.Back)
+	m.PropagateMode(m.Edit, m.Back)
 
 	ref := m.Steps[0].Reference
 	if ref == nil {

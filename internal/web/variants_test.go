@@ -1,9 +1,12 @@
-package main
+package web
 
 import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+
+	"example.com/cnf/mise/internal/bom"
+	"example.com/cnf/mise/internal/store"
 )
 
 // mkFixture builds a small project: a Frame that contains a slot, where the
@@ -12,7 +15,7 @@ import (
 // choice and the sub-assembly under it.
 func mkFixture(t *testing.T) (*sql.DB, map[string]int64) {
 	t.Helper()
-	db, err := openDB(":memory:")
+	db, err := store.OpenDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,14 +23,14 @@ func mkFixture(t *testing.T) (*sql.DB, map[string]int64) {
 	ids := map[string]int64{}
 
 	mkPart := func(name string) int64 {
-		id, err := upsertPart(db, &Part{Name: name, Kind: "electronic", Attrs: "{}"})
+		id, err := store.UpsertPart(db, &store.Part{Name: name, Kind: "electronic", Attrs: "{}"})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return id
 	}
 	mkAsm := func(name string) int64 {
-		id, err := upsertAssembly(db, &Assembly{Name: name})
+		id, err := store.UpsertAssembly(db, &store.Assembly{Name: name})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -44,39 +47,39 @@ func mkFixture(t *testing.T) (*sql.DB, map[string]int64) {
 	// PCB A is one board; PCB B is a board plus 2 standoffs (so choosing B pulls
 	// extra parts in through the option's sub-assembly).
 	standoff := ids["standoff"]
-	if _, err := addLine(db, &Line{AssemblyID: ids["pcbB"], ItemType: "part", PartID: &standoff, Qty: 2}); err != nil {
+	if _, err := store.AddLine(db, &store.Line{AssemblyID: ids["pcbB"], ItemType: "part", PartID: &standoff, Qty: 2}); err != nil {
 		t.Fatal(err)
 	}
 
 	// Frame: 4 bolts + a slot over the two PCB revisions.
 	bolt := ids["bolt"]
-	if _, err := addLine(db, &Line{AssemblyID: ids["frame"], ItemType: "part", PartID: &bolt, Qty: 4}); err != nil {
+	if _, err := store.AddLine(db, &store.Line{AssemblyID: ids["frame"], ItemType: "part", PartID: &bolt, Qty: 4}); err != nil {
 		t.Fatal(err)
 	}
 
 	// The Carrier holds the slot, so the slot is not at the root — the picker
 	// must find it through a sub-assembly edge.
-	slot, err := addSlot(db, &VariantSlot{AssemblyID: ids["carrier"], Name: "PCB", Notes: "rev A/B share the frame"})
+	slot, err := store.AddSlot(db, &store.VariantSlot{AssemblyID: ids["carrier"], Name: "PCB", Notes: "rev A/B share the frame"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ids["slot"] = slot
-	if _, err := addLine(db, &Line{AssemblyID: ids["carrier"], ItemType: "slot", SlotID: &slot, Qty: 1}); err != nil {
+	if _, err := store.AddLine(db, &store.Line{AssemblyID: ids["carrier"], ItemType: "slot", SlotID: &slot, Qty: 1}); err != nil {
 		t.Fatal(err)
 	}
 	carrier := ids["carrier"]
-	if _, err := addLine(db, &Line{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: &carrier, Qty: 1}); err != nil {
+	if _, err := store.AddLine(db, &store.Line{AssemblyID: ids["frame"], ItemType: "assembly", ChildAssemblyID: &carrier, Qty: 1}); err != nil {
 		t.Fatal(err)
 	}
 
 	// options: A (default), B
 	ca := ids["pcbA"]
 	cb := ids["pcbB"]
-	optA, err := addOption(db, &Option{SlotID: slot, Label: "rev A", TargetType: "assembly", ChildAssemblyID: &ca, Qty: 1})
+	optA, err := store.AddOption(db, &store.Option{SlotID: slot, Label: "rev A", TargetType: "assembly", ChildAssemblyID: &ca, Qty: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	optB, err := addOption(db, &Option{SlotID: slot, Label: "rev B", TargetType: "assembly", ChildAssemblyID: &cb, Qty: 1})
+	optB, err := store.AddOption(db, &store.Option{SlotID: slot, Label: "rev B", TargetType: "assembly", ChildAssemblyID: &cb, Qty: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +88,7 @@ func mkFixture(t *testing.T) (*sql.DB, map[string]int64) {
 	return db, ids
 }
 
-func qtyOf(g *GatherResult, name string) float64 {
+func qtyOf(g *bom.GatherResult, name string) float64 {
 	for _, p := range g.Total {
 		if p.Name == name {
 			return p.Qty
@@ -98,7 +101,7 @@ func qtyOf(g *GatherResult, name string) float64 {
 // it default, so a build with no explicit choice still resolves.
 func TestFirstOptionIsDefault(t *testing.T) {
 	db, ids := mkFixture(t)
-	opts, err := optionsForSlot(db, ids["slot"])
+	opts, err := store.OptionsForSlot(db, ids["slot"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +119,7 @@ func TestSlotDefaultVsExplicit(t *testing.T) {
 	db, ids := mkFixture(t)
 
 	// no selection -> default (rev A): no standoffs
-	g, err := gather(db, ids["frame"], nil)
+	g, err := bom.Gather(db, ids["frame"], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,11 +137,11 @@ func TestSlotDefaultVsExplicit(t *testing.T) {
 	}
 
 	// explicit rev B -> 2 standoffs appear
-	sel := Selection{}
+	sel := store.Selection{}
 	if err := sel.Set(db, ids["slot"], ids["optB"]); err != nil {
 		t.Fatal(err)
 	}
-	g2, err := gather(db, ids["frame"], sel)
+	g2, err := bom.Gather(db, ids["frame"], sel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,11 +164,11 @@ func TestSlotQuantityMultiplies(t *testing.T) {
 	if _, err := db.Exec(`UPDATE variant_option SET qty=3 WHERE id=?`, ids["optB"]); err != nil {
 		t.Fatal(err)
 	}
-	sel := Selection{}
+	sel := store.Selection{}
 	if err := sel.Set(db, ids["slot"], ids["optB"]); err != nil {
 		t.Fatal(err)
 	}
-	g, err := gather(db, ids["frame"], sel)
+	g, err := bom.Gather(db, ids["frame"], sel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,11 +181,11 @@ func TestSlotQuantityMultiplies(t *testing.T) {
 // pointing a slot at an unrelated option.
 func TestSelectionRejectsWrongSlot(t *testing.T) {
 	db, ids := mkFixture(t)
-	other, err := addSlot(db, &VariantSlot{AssemblyID: ids["frame"], Name: "Other"})
+	other, err := store.AddSlot(db, &store.VariantSlot{AssemblyID: ids["frame"], Name: "Other"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sel := Selection{}
+	sel := store.Selection{}
 	if err := sel.Set(db, other, ids["optA"]); err == nil {
 		t.Fatal("setting a slot to another slot's option must be rejected")
 	}
@@ -192,7 +195,7 @@ func TestSelectionRejectsWrongSlot(t *testing.T) {
 // through a sub-assembly edge, not just the root's own slots.
 func TestSlotsUnderFindsNestedSlot(t *testing.T) {
 	db, ids := mkFixture(t)
-	slots, err := slotsUnder(db, ids["frame"])
+	slots, err := store.SlotsUnder(db, ids["frame"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,13 +216,13 @@ func TestCycleGuardThroughOption(t *testing.T) {
 	db, ids := mkFixture(t)
 	// Frame -> Carrier -> (slot -> PCB rev B). Making Frame an option of a slot
 	// inside PCB rev B would close a loop; the guard must see it.
-	slotInPCB, err := addSlot(db, &VariantSlot{AssemblyID: ids["pcbB"], Name: "Nested"})
+	slotInPCB, err := store.AddSlot(db, &store.VariantSlot{AssemblyID: ids["pcbB"], Name: "Nested"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	frame := ids["frame"]
 	// direct check: can Frame be added under PCB rev B? No — B is under Frame.
-	if err := wouldCycle(db, ids["pcbB"], frame); err == nil {
+	if err := store.WouldCycle(db, ids["pcbB"], frame); err == nil {
 		t.Fatal("PCB rev B -> Frame must be rejected (B is under Frame)")
 	}
 	// and through the option edge specifically
@@ -227,7 +230,7 @@ func TestCycleGuardThroughOption(t *testing.T) {
 		VALUES (?,?,'assembly',?,1)`, slotInPCB, "loop", frame); err != nil {
 		t.Fatal(err)
 	}
-	if err := wouldCycle(db, frame, ids["pcbB"]); err == nil {
+	if err := store.WouldCycle(db, frame, ids["pcbB"]); err == nil {
 		t.Fatal("Frame -> PCB rev B must be rejected once B carries a slot option back to Frame")
 	}
 }
@@ -245,7 +248,7 @@ func TestMigrationFromPhase1(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(migrations[0].stmt); err != nil {
+	if _, err := db.Exec(store.Migrations[0].Stmt); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`INSERT INTO assembly (id,name) VALUES (1,'Frame'),(2,'Bracket')`); err != nil {
@@ -263,7 +266,7 @@ func TestMigrationFromPhase1(t *testing.T) {
 	db.Close()
 
 	// Opening through openDB must migrate it.
-	db2, err := openDB(path)
+	db2, err := store.OpenDB(path)
 	if err != nil {
 		t.Fatalf("open+migrate: %v", err)
 	}
@@ -286,24 +289,24 @@ func TestMigrationFromPhase1(t *testing.T) {
 	}
 
 	// the widened CHECK now accepts a slot line
-	sl, err := addSlot(db2, &VariantSlot{AssemblyID: 1, Name: "PCB"})
+	sl, err := store.AddSlot(db2, &store.VariantSlot{AssemblyID: 1, Name: "PCB"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addLine(db2, &Line{AssemblyID: 1, ItemType: "slot", SlotID: &sl, Qty: 1}); err != nil {
+	if _, err := store.AddLine(db2, &store.Line{AssemblyID: 1, ItemType: "slot", SlotID: &sl, Qty: 1}); err != nil {
 		t.Fatalf("slot line rejected after migration: %v", err)
 	}
 
 	// migration recorded, so reopening is a no-op rather than a re-run
-	if err := migrate(db2); err != nil {
+	if err := store.Migrate(db2); err != nil {
 		t.Fatalf("second migrate: %v", err)
 	}
 	var applied int
 	if err := db2.QueryRow(`SELECT COUNT(*) FROM migrations`).Scan(&applied); err != nil {
 		t.Fatal(err)
 	}
-	if applied != len(migrations) {
-		t.Errorf("%d migrations recorded, want %d", applied, len(migrations))
+	if applied != len(store.Migrations) {
+		t.Errorf("%d migrations recorded, want %d", applied, len(store.Migrations))
 	}
 
 	// no dangling foreign keys

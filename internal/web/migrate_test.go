@@ -1,8 +1,10 @@
-package main
+package web
 
 import (
 	"path/filepath"
 	"testing"
+
+	"example.com/cnf/mise/internal/store"
 )
 
 // TestDocumentMigrationPreservesSteps is the migration-risk test: 004 rebuilds
@@ -12,7 +14,7 @@ import (
 // runs the real migration and checks nothing was dropped and the new type works.
 func TestDocumentMigrationPreservesSteps(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "upgrade.db")
-	db, err := openDB(dbPath)
+	db, err := store.OpenDB(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,20 +52,20 @@ func TestDocumentMigrationPreservesSteps(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO assembly (name) VALUES ('Frame')`); err != nil {
 		t.Fatal(err)
 	}
-	stepID, err := addStep(db, &Step{AssemblyID: 1, ItemType: "note", Title: "keep me", Body: "precious"})
+	stepID, err := store.AddStep(db, &store.Step{AssemblyID: 1, ItemType: "note", Title: "keep me", Body: "precious"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := addImage(db, stepID, "p.png", "image/png", tick(), "cap"); err != nil {
+	if _, err := store.AddImage(db, stepID, "p.png", "image/png", tick(), "cap"); err != nil {
 		t.Fatal(err)
 	}
 
 	// Now run the real migration list.
-	if err := migrate(db); err != nil {
+	if err := store.Migrate(db); err != nil {
 		t.Fatalf("migration from phase 3: %v", err)
 	}
 
-	got, err := getStep(db, stepID)
+	got, err := store.GetStep(db, stepID)
 	if err != nil || got == nil {
 		t.Fatalf("step lost in migration: %v", err)
 	}
@@ -75,7 +77,7 @@ func TestDocumentMigrationPreservesSteps(t *testing.T) {
 	}
 
 	// And the new type must be accepted after the rebuild.
-	if _, err := addStep(db, &Step{AssemblyID: 1, ItemType: "document", Title: "board"}); err != nil {
+	if _, err := store.AddStep(db, &store.Step{AssemblyID: 1, ItemType: "document", Title: "board"}); err != nil {
 		t.Errorf("document step rejected after migration: %v", err)
 	}
 	// The old CHECK must still reject a bogus type.

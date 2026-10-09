@@ -1,4 +1,4 @@
-package main
+package store
 
 import (
 	"database/sql"
@@ -10,17 +10,17 @@ import (
 )
 
 // Schema is applied in order. Each step is idempotent in effect: fresh
-// databases run every step from empty, an existing one runs only the steps it
+// databases run every step from empty, an existing one runs only the Steps it
 // has not recorded. migrations table records what has been applied.
 //
 // Steps that change a CHECK constraint need a table rebuild — SQLite cannot
-// alter one in place — so those steps create a new table, copy, drop, rename.
+// alter one in place — so those Steps create a new table, copy, drop, rename.
 // That is why this is a migration list rather than a pile of CREATE IF NOT
 // EXISTS statements.
 
-var migrations = []struct {
-	name string
-	stmt string
+var Migrations = []struct {
+	Name string
+	Stmt string
 }{
 	{"001_init", `
 CREATE TABLE IF NOT EXISTS project (
@@ -160,8 +160,8 @@ ALTER TABLE assembly_line_new RENAME TO assembly_line;
 CREATE INDEX IF NOT EXISTS idx_line_assembly ON assembly_line(assembly_id);
 `},
 
-	// 003 adds the authored manual: ordered steps per assembly, optional images,
-	// and steps that pull in a sub-assembly's (or a slot's chosen) manual. A step
+	// 003 adds the authored manual: ordered Steps per assembly, optional images,
+	// and Steps that pull in a sub-assembly's (or a slot's chosen) manual. A step
 	// carries the same item_type shape as an assembly line, so the manual tree
 	// resolves variant choices exactly the way the gather does.
 	{"003_manual", `
@@ -243,9 +243,9 @@ CREATE INDEX IF NOT EXISTS idx_step_assembly ON manual_step(assembly_id);
 `},
 }
 
-// openDB opens (creating if needed) the SQLite database at path and applies any
+// OpenDB opens (creating if needed) the SQLite database at path and applies any
 // migrations it has not recorded. Foreign keys must be enabled per-connection.
-func openDB(path string) (*sql.DB, error) {
+func OpenDB(path string) (*sql.DB, error) {
 	if dir := filepath.Dir(path); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, fmt.Errorf("create db dir: %w", err)
@@ -258,31 +258,31 @@ func openDB(path string) (*sql.DB, error) {
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
-	if err := migrate(db); err != nil {
+	if err := Migrate(db); err != nil {
 		return nil, err
 	}
 	return db, nil
 }
 
-func migrate(db *sql.DB) error {
+func Migrate(db *sql.DB) error {
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS migrations (
 		name TEXT PRIMARY KEY,
 		applied_at TEXT NOT NULL DEFAULT (datetime('now'))
 	)`); err != nil {
 		return err
 	}
-	for _, m := range migrations {
+	for _, m := range Migrations {
 		var n int
-		if err := db.QueryRow(`SELECT COUNT(*) FROM migrations WHERE name=?`, m.name).Scan(&n); err != nil {
+		if err := db.QueryRow(`SELECT COUNT(*) FROM migrations WHERE name=?`, m.Name).Scan(&n); err != nil {
 			return err
 		}
 		if n > 0 {
 			continue
 		}
-		if err := applyMigration(db, m.stmt); err != nil {
-			return fmt.Errorf("migration %s: %w", m.name, err)
+		if err := applyMigration(db, m.Stmt); err != nil {
+			return fmt.Errorf("migration %s: %w", m.Name, err)
 		}
-		if _, err := db.Exec(`INSERT INTO migrations (name) VALUES (?)`, m.name); err != nil {
+		if _, err := db.Exec(`INSERT INTO migrations (name) VALUES (?)`, m.Name); err != nil {
 			return err
 		}
 	}

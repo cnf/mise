@@ -1,4 +1,4 @@
-package main
+package partdb
 
 import (
 	"bytes"
@@ -12,41 +12,35 @@ import (
 	"time"
 )
 
-// Part-DB is read-only from mise's side: we sweep its part list into a local
-// cache and match against that. Its /api/parts endpoint filters on exact fields
-// only (name, ipn, manufacturer_product_number, ...) with no free-text query,
-// so per-keystroke live search is the wrong shape — and the instance is small
-// enough (hundreds of parts) that a full sweep is trivial.
-
-type pdbRef struct {
+type PdbRef struct {
 	ProviderKey string `json:"provider_key"`
 	ProviderID  string `json:"provider_id"`
 	ProviderURL string `json:"provider_url"`
 }
 
-// pdbRefList tolerates both shapes the API emits for providerReference: a bare
+// PdbRefList tolerates both shapes the API emits for providerReference: a bare
 // object when a part has one supplier reference, and an array when it has
 // several. Decoding it as a single object fails on the array case.
-type pdbRefList []pdbRef
+type PdbRefList []PdbRef
 
-func (r *pdbRefList) UnmarshalJSON(b []byte) error {
+func (r *PdbRefList) UnmarshalJSON(b []byte) error {
 	b = bytesTrimSpace(b)
 	if len(b) == 0 || string(b) == "null" {
 		return nil
 	}
 	if b[0] == '[' {
-		var list []pdbRef
+		var list []PdbRef
 		if err := json.Unmarshal(b, &list); err != nil {
 			return err
 		}
 		*r = list
 		return nil
 	}
-	var one pdbRef
+	var one PdbRef
 	if err := json.Unmarshal(b, &one); err != nil {
 		return err
 	}
-	*r = []pdbRef{one}
+	*r = []PdbRef{one}
 	return nil
 }
 
@@ -58,7 +52,7 @@ type pdbNamed struct {
 	Name string `json:"name"`
 }
 
-type pdbPart struct {
+type PdbPart struct {
 	ID                        int64      `json:"id"`
 	Name                      string     `json:"name"`
 	Description               string     `json:"description"`
@@ -67,12 +61,12 @@ type pdbPart struct {
 	DatasheetURL              string     `json:"datasheet_url"`
 	Footprint                 *pdbNamed  `json:"footprint"`
 	Category                  *pdbNamed  `json:"category"`
-	ProviderReference         pdbRefList `json:"providerReference"`
+	ProviderReference         PdbRefList `json:"providerReference"`
 }
 
 type pdbCollection struct {
 	TotalItems int       `json:"hydra:totalItems"`
-	Member     []pdbPart `json:"hydra:member"`
+	Member     []PdbPart `json:"hydra:member"`
 }
 
 func partDBConfig() (base, key string, err error) {
@@ -95,8 +89,8 @@ func partDBConfig() (base, key string, err error) {
 	return strings.TrimRight(base, "/"), key, nil
 }
 
-// syncPartDB fetches every part from Part-DB and replaces the local cache.
-func syncPartDB(db *sql.DB) (int, error) {
+// SyncPartDB fetches every part from Part-DB and replaces the local cache.
+func SyncPartDB(db *sql.DB) (int, error) {
 	base, key, err := partDBConfig()
 	if err != nil {
 		return 0, err
@@ -173,7 +167,7 @@ type CacheHit struct {
 	DatasheetURL string `json:"datasheet_url"`
 }
 
-func searchCache(db *sql.DB, q string) ([]CacheHit, error) {
+func SearchCache(db *sql.DB, q string) ([]CacheHit, error) {
 	q = strings.TrimSpace(q)
 	sqlStr := `SELECT partdb_id,name,mpn,manufacturer,description,datasheet_url FROM partdb_cache`
 	var args []any
