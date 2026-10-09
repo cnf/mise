@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mise — Concept B · Workbench</title>
+<style>
+/* ============================================================
+   CONCEPT B — "WORKBENCH"
+   Opinion: the app is a workbench for DOING the job.
+   Two tasks rule the page: gather the parts, follow the build.
+   Warm, rounded, hand-friendly — an industrial tool, not a
+   CAD sheet. Amber accent, card surfaces, generous targets.
+   ============================================================ */
+:root{
+  --bg:#1a1714; --card:#241f1a; --card2:#2e2822; --well:#171410;
+  --line:#3a322a; --line2:#4a4036;
+  --ink:#f2ece4; --dim:#b3a493; --faint:#7d7061;
+  --amber:#f0a541; --amber-d:#7a5220; --on-amber:#231603;
+  --ok:#8fce7d; --warn:#f0a541; --red:#e5776b;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+  --r:10px; --r2:14px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);
+  -webkit-font-smoothing:antialiased}
+a{color:var(--amber);text-decoration:none} a:hover{text-decoration:underline}
+.num{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+
+/* ---- chrome: warm bar, tool-like ------------------------------- */
+.hd{display:flex;align-items:center;gap:1.4rem;padding:.7rem 1.3rem;
+  background:var(--card);border-bottom:1px solid var(--line)}
+.logo{font-weight:800;letter-spacing:.03em;font-size:1.05rem}
+.logo span{color:var(--amber)}
+.hd nav{display:flex;gap:.3rem;margin-left:.4rem}
+.hd nav a{color:var(--dim);padding:.4rem .8rem;border-radius:8px;font-size:.9rem;font-weight:500}
+.hd nav a.on{background:var(--card2);color:var(--ink)}
+.hd nav a:hover{background:var(--card2);color:var(--ink);text-decoration:none}
+.hd .sp{flex:1}
+.hd .sync{font-size:.8rem;color:var(--faint)}
+.hd .sync b{color:var(--ok)}
+
+/* ---- shell: rail + content ------------------------------------- */
+.shell{display:grid;grid-template-columns:15rem 1fr;max-width:1240px;margin:0 auto;
+  min-height:calc(100vh - 3.4rem)}
+.rail{border-right:1px solid var(--line);padding:1.3rem 1rem;background:#1c1915}
+.rail h4{margin:.2rem 0 .6rem;font-size:.7rem;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--faint)}
+.rail .task{display:flex;align-items:center;gap:.7rem;padding:.7rem .75rem;border-radius:var(--r);
+  margin-bottom:.5rem;font-weight:600}
+.rail .task .ic{width:1.7rem;height:1.7rem;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;font-size:.95rem;background:var(--card2);flex:none}
+.rail .task.g{background:var(--amber);color:var(--on-amber)}
+.rail .task.g .ic{background:rgba(0,0,0,.14)}
+.rail .task.b{border:1px solid var(--line2);color:var(--ink)}
+.rail .task.b .ic{background:var(--card2)}
+.rail .task small{display:block;font-weight:400;font-size:.72rem;opacity:.75}
+.rail .meta{margin-top:1.6rem;border-top:1px solid var(--line);padding-top:1rem}
+.rail .meta div{display:flex;justify-content:space-between;font-size:.82rem;color:var(--dim);
+  padding:.22rem 0}
+.rail .meta b{color:var(--ink)}
+.content{padding:1.5rem 1.8rem 3rem;min-width:0}
+
+/* ---- heading --------------------------------------------------- */
+.crumb{color:var(--faint);font-size:.8rem;margin-bottom:.3rem}
+h1{font-size:1.7rem;margin:.1rem 0 .4rem;font-weight:700;letter-spacing:-.01em}
+.lede{color:var(--dim);max-width:62ch;margin:.2rem 0 1.2rem}
+
+/* ---- the two big verbs, openly stated -------------------------- */
+.verbs{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.6rem}
+.verb{display:block;border-radius:var(--r2);padding:1rem 1.15rem;border:1px solid var(--line2);
+  background:var(--card)}
+.verb.primary{background:linear-gradient(135deg,#3a2c14,#2a2114);border-color:var(--amber-d)}
+.verb .vt{font-size:1.05rem;font-weight:700;margin-bottom:.15rem}
+.verb .vd{color:var(--dim);font-size:.86rem}
+.verb .go{margin-top:.7rem;font-family:var(--mono);font-size:.78rem;color:var(--amber)}
+.verb:hover{text-decoration:none;border-color:var(--amber)}
+.verb h3{margin:0}
+
+/* ---- cards ----------------------------------------------------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r2);
+  margin-bottom:1.1rem;overflow:hidden}
+.card .hd2{display:flex;align-items:center;gap:.7rem;padding:.8rem 1.1rem;
+  border-bottom:1px solid var(--line)}
+.card .hd2 h2{margin:0;font-size:1rem;font-weight:650}
+.card .hd2 .n{font-family:var(--mono);font-size:.78rem;color:var(--faint)}
+.card .hd2 .r{margin-left:auto;font-size:.82rem}
+.pad{padding:.4rem 1.1rem 1rem}
+
+/* ---- the parts list: chunky, scannable ------------------------- */
+ul.parts{list-style:none;margin:0;padding:0}
+ul.parts li{display:grid;grid-template-columns:2.4rem 1fr auto;gap:.9rem;align-items:center;
+  padding:.7rem .3rem;border-bottom:1px solid var(--line)}
+ul.parts li:hover{background:var(--card2)}
+ul.parts li:last-child{border-bottom:0}
+ul.parts .q{font-family:var(--mono);font-size:1.15rem;font-weight:700;color:var(--amber);
+  text-align:center;background:var(--well);border-radius:8px;padding:.35rem 0}
+ul.parts .q small{display:block;font-size:.5rem;letter-spacing:.1em;color:var(--faint);
+  font-weight:400}
+ul.parts .nm{font-weight:600}
+ul.parts .sub{font-size:.78rem;color:var(--dim)}
+ul.parts .sub .refs{font-family:var(--mono);color:var(--faint)}
+ul.parts .price{font-family:var(--mono);font-size:.82rem;color:var(--dim);text-align:right}
+ul.parts li.dnp{opacity:.45}
+ul.parts li.dnp .nm{text-decoration:line-through}
+.chip{display:inline-block;font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;
+  background:var(--card2);color:var(--dim);border-radius:99px;padding:.1rem .5rem;margin-left:.4rem}
+.chip.local{background:#3a2c14;color:var(--amber)}
+
+/* ---- a slot, as a chooser card --------------------------------- */
+.slot{background:var(--well);border:1px dashed var(--line2);border-radius:var(--r2);
+  padding:.9rem 1.1rem;margin:.6rem 0}
+.slot .sh{font-weight:650;margin-bottom:.2rem}
+.slot .sd{color:var(--dim);font-size:.82rem;margin-bottom:.7rem}
+.slot .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem}
+.slot .choice{border:1px solid var(--line2);background:var(--card);border-radius:var(--r);
+  padding:.6rem .75rem;cursor:pointer}
+.slot .choice.sel{border-color:var(--amber);background:#2a2214}
+.slot .choice .cl{font-weight:600;font-size:.9rem}
+.slot .choice .ct{font-size:.74rem;color:var(--dim);font-family:var(--mono)}
+.slot .choice .cd{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+
+/* ---- steps: friendly numbered procedure ------------------------ */
+.steps{counter-reset:none}
+.stp{display:grid;grid-template-columns:2.6rem 1fr;gap:.9rem;padding:.9rem .3rem;
+  border-bottom:1px solid var(--line)}
+.stp:last-child{border-bottom:0}
+.stp .no{width:2.2rem;height:2.2rem;border-radius:50%;background:var(--amber);color:var(--on-amber);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem}
+.stp .ttl{font-weight:650;font-size:1.02rem;margin-bottom:.15rem}
+.stp .txt{color:var(--dim)}
+.stp .meta{margin-top:.4rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.frame{margin-top:.7rem;border-radius:var(--r);overflow:hidden;border:1px solid var(--line2)}
+.frame .bar{padding:.35rem .8rem;background:var(--card2);color:var(--faint);font-size:.72rem;
+  font-family:var(--mono)}
+.frame .body{height:8.5rem;background:#0f0d0a;color:var(--dim);display:flex;align-items:center;
+  justify-content:center;font-size:.8rem}
+
+/* ---- actions --------------------------------------------------- */
+.acts{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.4rem}
+.btn{font:inherit;font-size:.86rem;font-weight:600;padding:.55rem 1rem;border-radius:9px;
+  border:1px solid var(--line2);background:var(--card2);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--amber);text-decoration:none;color:var(--ink)}
+.btn.primary{background:var(--amber);color:var(--on-amber);border-color:var(--amber)}
+.btn.ghost{background:transparent}
+.foot{color:var(--faint);font-size:.76rem;margin-top:2rem;border-top:1px solid var(--line);
+  padding-top:.8rem}
+</style>
+</head><body>
+
+<header class="hd">
+  <div class="logo">mise<span>.</span></div>
+  <nav>
+    <a href="#">Parts</a>
+    <a class="on" href="#">Assemblies</a>
+    <a href="#">Builds</a>
+  </nav>
+  <div class="sp"></div>
+  <div class="sync">Part-DB <b>●</b> synced</div>
+</header>
+
+<div class="shell">
+  <aside class="rail">
+    <h4>Do the job</h4>
+    <a class="task g" href="#"><div class="ic">⚙</div><div>Gather the parts
+      <small>what to pull from stock</small></div></a>
+    <a class="task b" href="#"><div class="ic">📖</div><div>Follow the build
+      <small>step-by-step + board</small></div></a>
+
+    <div class="meta">
+      <h4>This assembly</h4>
+      <div><span>Lines</span><b class="num">36</b></div>
+      <div><span>Components</span><b class="num">50</b></div>
+      <div><span>Variants</span><b class="num">2</b></div>
+      <div><span>Est. cost</span><b class="num">€ 41.60</b></div>
+    </div>
+  </aside>
+
+  <main class="content">
+    <div class="crumb">Assemblies › Kinematics</div>
+    <h1>FunShoot Activator PCB rev C</h1>
+    <p class="lede">Main controller board — ESP32-S3 with four channel drivers.
+      Pick which revision and standoff height this build uses, then gather the
+      parts and go.</p>
+
+    <div class="verbs">
+      <a class="verb primary" href="#">
+        <div class="vt">Gather the parts</div>
+        <div class="vd">The flattened shopping / pull list for this build — grouped
+          by sub-assembly so you know which bag.</div>
+        <div class="go">open gather list →</div>
+      </a>
+      <a class="verb" href="#">
+        <div class="vt">Follow the build</div>
+        <div class="vd">The authored manual, with the interactive board embedded
+          and steps that follow your chosen variants.</div>
+        <div class="go">open manual →</div>
+      </a>
+    </div>
+
+    <div class="card">
+      <div class="hd2"><h2>Parts</h2><span class="n">36 lines · 50 components</span>
+        <span class="r"><a href="#">edit contents</a></span></div>
+      <div class="pad">
+        <ul class="parts">
+          <li>
+            <div class="q">3<small>PCS</small></div>
+            <div><div class="nm">1µF capacitor</div>
+              <div class="sub">0805 · <span class="refs">C3, C4, C19</span></div></div>
+            <div class="price">€ 0.09</div>
+          </li>
+          <li>
+            <div class="q">4<small>PCS</small></div>
+            <div><div class="nm">2.7kΩ resistor</div>
+              <div class="sub">0805 hand-solder · <span class="refs">R3, R4, R14, R15</span></div></div>
+            <div class="price">€ 0.12</div>
+          </li>
+          <li>
+            <div class="q">5<small>PCS</small></div>
+            <div><div class="nm">NUP1301</div>
+              <div class="sub">SOT-23-3 · <span class="refs">D5, D6, D7, D8, D9</span></div></div>
+            <div class="price">€ 1.10</div>
+          </li>
+          <li>
+            <div class="q">1<small>PC</small></div>
+            <div><div class="nm">ESP32-S3-WROOM-1</div>
+              <div class="sub">module · <span class="refs">U1</span></div></div>
+            <div class="price">€ 3.90</div>
+          </li>
+          <li>
+            <div class="q">1<small>PC</small></div>
+            <div><div class="nm">TSR2-2450N</div>
+              <div class="sub">DC-DC 24→5V · <span class="refs">U3</span></div></div>
+            <div class="price">€ 12.40</div>
+          </li>
+          <li>
+            <div class="q">4<small>PCS</small></div>
+            <div><div class="nm">M3×8 button head</div>
+              <div class="sub">internal part list <span class="chip local">local</span></div></div>
+            <div class="price">€ 0.20</div>
+          </li>
+          <li>
+            <div class="q">1<small>PC</small></div>
+            <div><div class="nm">PCB rev C</div>
+              <div class="sub">FunShoot board <span class="chip">printed</span></div></div>
+            <div class="price">€ 8.20</div>
+          </li>
+          <li class="dnp">
+            <div class="q">1<small>PC</small></div>
+            <div><div class="nm">0Ω resistor</div>
+              <div class="sub">0402 · <span class="refs">R17</span> <span class="chip">dnp</span></div></div>
+            <div class="price">—</div>
+          </li>
+        </ul>
+
+        <div class="slot">
+          <div class="sh">◈ Standoff height</div>
+          <div class="sd">The same board mounts at three heights — pick one for this build.</div>
+          <div class="row3">
+            <div class="choice sel"><div class="cd">default</div>
+              <div class="cl">Short — rev A</div><div class="ct">M3×6 brass ×4</div></div>
+            <div class="choice"><div class="cl">Tall — rev B</div>
+              <div class="ct">M3×12 nylon ×4</div></div>
+            <div class="choice"><div class="cl">Extra tall — rev C</div>
+              <div class="ct">M3×18 nylon ×4</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd2"><h2>How to build it</h2><span class="n">viewing as “Club rev C”</span>
+        <span class="r"><a href="#">full manual</a></span></div>
+      <div class="pad steps">
+        <div class="stp">
+          <div class="no">1</div>
+          <div><div class="ttl">Fit the 0805s first</div>
+            <div class="txt">Start with the three 1µF caps and the 2.7kΩ resistors. They
+              sit under the module, so they have to be on before anything tall goes down.</div>
+            <div class="meta"><span class="chip">variant · rev C</span></div></div>
+        </div>
+        <div class="stp">
+          <div class="no">2</div>
+          <div><div class="ttl">Module and driver</div>
+            <div class="txt">Seat U1 and U3. Rev C uses the taller standoffs, so leave
+              the sockets proud before torquing.</div>
+            <div class="frame">
+              <div class="bar">◧ interactive board · board.html</div>
+              <div class="body">[ iBOM renders here — pan &amp; click to trace nets ]</div>
+            </div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="acts">
+      <button class="btn primary">Freeze this build</button>
+      <button class="btn">Download CSV</button>
+      <button class="btn ghost">Done — read only</button>
+    </div>
+
+    <div class="foot">mise · a saved build for a specific place, for the club ·
+      rev C · “Club rev C”</div>
+  </main>
+</div>
+</body></html>

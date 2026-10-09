@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mise — design directions</title>
+<style>
+body{margin:0;background:#101216;color:#e8eaef;font:15px/1.5 system-ui,-apple-system,sans-serif;
+  display:flex;min-height:100vh;align-items:center;justify-content:center}
+.wrap{max-width:820px;padding:2rem}
+h1{font-size:1.6rem;margin:0 0 .3rem}
+p{color:#9aa3b2;margin:0 0 1.6rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+a{display:block;border:1px solid #2a2f3a;border-radius:12px;padding:1.2rem;text-decoration:none;
+  color:inherit;transition:border-color .15s}
+a:hover{border-color:#6ea8fe}
+.sw{display:flex;gap:.35rem;margin-bottom:.8rem}
+.sw i{width:1.5rem;height:1.5rem;border-radius:5px;display:block}
+.t{font-weight:700;font-size:1.1rem;margin-bottom:.25rem}
+.s{color:#9aa3b2;font-size:.86rem}
+.k{display:inline-block;margin-top:.7rem;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+  color:#6ea8fe}
+</style></head><body>
+<div class="wrap">
+  <h1>mise — two directions</h1>
+  <p>Same page, same real board data. Click through both, then tell me which (or neither).</p>
+  <div class="grid">
+    <a href="A-blueprint.html">
+      <div class="sw"><i style="background:#0d1117"></i><i style="background:#121924"></i>
+        <i style="background:#4cc2ff"></i></div>
+      <div class="t">A — Blueprint</div>
+      <div class="s">A BOM is a drawing. Ruled sheet, monospaced numbers, cold single accent.
+        Dense and precise.</div>
+      <div class="k">open A →</div>
+    </a>
+    <a href="B-workbench.html">
+      <div class="sw"><i style="background:#1a1714"></i><i style="background:#241f1a"></i>
+        <i style="background:#f0a541"></i></div>
+      <div class="t">B — Workbench</div>
+      <div class="s">The app is for doing the job. Warm, rounded, two tasks named up front,
+        amber accent.</div>
+      <div class="k">open B →</div>
+    </a>
+  </div>
+</div>
+</body></html>
