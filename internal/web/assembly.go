@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"example.com/cnf/mise/internal/bom"
 	"example.com/cnf/mise/internal/store"
 )
 
@@ -185,6 +186,30 @@ func (s *Server) assemblyByID(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	// The assembly page states the same two things the whole app is for: what
+	// this thing is made of, and how many of it. The gather below gives the
+	// line/component counts and the cost roll-up without a second query path,
+	// and the slot count is what tells you the page can show alternatives.
+	g, _ := bom.Gather(s.db, id, nil)
+	lineCount, compCount := 0, 0
+	cost := ""
+	if g != nil {
+		lineCount = len(g.Total)
+		for _, t := range g.Total {
+			compCount += int(t.Qty)
+		}
+		for cur, sum := range g.TotalCost {
+			cost = strconv.FormatFloat(sum, 'f', 2, 64) + " " + cur
+			break
+		}
+	}
+	slots, _ := store.ListSlots(s.db, id)
+	// The manual's own step count, so the page can say "follow the build — 7
+	// steps" rather than making you open it to find out whether it is authored.
+	stepCount := 0
+	if ss, err := store.Steps(s.db, id); err == nil {
+		stepCount = len(ss)
+	}
 	s.render(w, "assembly_view.html", map[string]any{
 		"Assembly": a, "Lines": ls, "Parts": parts, "All": all,
 		"Back": "/assemblies/" + strconv.FormatInt(id, 10),
@@ -194,6 +219,9 @@ func (s *Server) assemblyByID(w http.ResponseWriter, r *http.Request) {
 		"Imported":    r.URL.Query().Get("imported"),
 		"ImportErr":   r.URL.Query().Get("ibom_step_error"),
 		"HasDocument": hasDoc,
+		// summary strip
+		"LineCount": lineCount, "CompCount": compCount, "SlotCount": len(slots),
+		"Cost": cost, "StepCount": stepCount,
 	})
 }
 

@@ -46,6 +46,49 @@ func TestAssemblyReadModeHasNoEditControls(t *testing.T) {
 			t.Errorf("read-mode assembly view is missing %q", want)
 		}
 	}
+	// and it states the two things the tool is for, rather than being a bare table
+	for _, want := range []string{"Gather the parts", "Follow the build"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("read-mode assembly view is missing the %q affordance", want)
+		}
+	}
+}
+
+// TestAssemblyReadModeRendersPartsAsList: the read surface is a parts list, not
+// a table of the same editor fields with the inputs hidden. A slot in particular
+// must show its alternatives as options, because "this hardware fits rev A, B or
+// C" is the thing a reader needs to see and the editor cannot express.
+func TestAssemblyReadModeRendersPartsAsList(t *testing.T) {
+	tmpl := parseTemplates(t)
+	db, ids := mkFixture(t)
+	// the fixture puts the variant slot on carrier, so that is the assembly whose
+	// read view must render the alternatives
+	a, _ := store.GetAssembly(db, ids["carrier"])
+	ls, _ := store.Lines(db, ids["carrier"])
+	parts, _ := store.ListParts(db, "")
+	asms, _ := store.ListAssemblies(db)
+
+	var buf bytes.Buffer
+	data := map[string]any{
+		"Assembly": a, "Lines": ls, "Parts": parts, "All": asms,
+		"Back": "/assemblies/1", "Edit": false, "LineCount": 3, "CompCount": 5,
+	}
+	if err := tmpl.ExecuteTemplate(&buf, "assembly_view.html", data); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, `class="plist"`) {
+		t.Error("read-mode assembly view does not use the parts list")
+	}
+	if !strings.Contains(out, `class="choice`) {
+		t.Error("a variant slot in read mode does not render its alternatives")
+	}
+	// the summary strip must state what the page is about
+	for _, want := range []string{"lines", "components"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("read-mode assembly view is missing the %q summary", want)
+		}
+	}
 }
 
 // TestAssemblyEditModeHasEditControls: the opt-in editor must still be a full

@@ -13,7 +13,7 @@
 
    The register is "workbench": warm dark surfaces, one amber accent, rounded
    cards. Dark by intent — this is a tool you look at with the lights on in a
-   shed, not a document. Rendered values are documented in DESIGN.md. */
+   shed, not a document. */
 :root{
   /* surfaces, darkest first */
   --bg:#1a1714;
@@ -81,6 +81,11 @@ main{padding:1.4rem;max-width:1150px;margin:0 auto}
 h1{font-size:var(--fs-h1);margin:.1rem 0 .5rem;font-weight:700;letter-spacing:-.01em}
 h2{font-size:var(--fs-h2);margin:1.6rem 0 .6rem;color:var(--dim);
   text-transform:uppercase;letter-spacing:.06em}
+/* ---- page heading: where you are, and why you're here --------------- */
+.crumb{color:var(--faint);font-size:var(--fs-sm);margin:.1rem 0 .35rem}
+.crumb a{color:var(--faint)}
+.crumb a:hover{color:var(--dim);text-decoration:none}
+.lede{color:var(--dim);max-width:62ch;margin:.2rem 0 1.2rem}
 /* ---- tables: hairline, no vertical rules ----------------------------- */
 table{border-collapse:collapse;width:100%;margin:.4rem 0 1.2rem}
 th,td{text-align:left;padding:.5rem .7rem;border-bottom:1px solid var(--line);
@@ -111,6 +116,7 @@ button.small{padding:.2rem .55rem;font-size:.78rem}
 form.inline{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0 1.2rem}
 .row{display:grid;grid-template-columns:9rem 1fr;gap:.5rem 1rem;align-items:center;margin:.5rem 0}
 /* ---- text utilities -------------------------------------------------- */
+.sp{flex:1}
 .muted{color:var(--dim)}
 .small{font-size:var(--fs-sm)}
 .warn{color:var(--warn)}
@@ -131,6 +137,28 @@ form.inline{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5re
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);
   padding:.9rem 1.1rem;min-width:9rem}
 .card b{display:block;font-size:1.55rem;font-family:ui-monospace,Menlo,monospace}
+/* a card with a titled header, used for the contents / editor panels */
+.card.panel{padding:0;overflow:hidden}
+.card .hd2{display:flex;align-items:center;gap:.7rem;padding:.8rem 1.1rem;
+  border-bottom:1px solid var(--line)}
+.card .hd2 h2{margin:0;font-size:1rem;font-weight:650;text-transform:none;
+  letter-spacing:0;color:var(--fg)}
+.card .hd2 .n{font-family:ui-monospace,Menlo,monospace;font-size:var(--fs-xs);color:var(--faint)}
+.card .hd2 .r{margin-left:auto;font-size:var(--fs-sm)}
+.card .pad{padding:.8rem 1.1rem 1rem}
+.card .pad h3{margin:1.1rem 0 .35rem;font-size:var(--fs-sm);color:var(--dim);
+  text-transform:uppercase;letter-spacing:.06em}
+.card .pad h3:first-child{margin-top:.2rem}
+/* the alternatives inside a variant slot, laid out as pickable cards */
+.plist .choices{display:flex;gap:.7rem;flex-wrap:wrap;margin-top:.5rem}
+.plist .choice{background:var(--bg);border:1px solid var(--line);border-radius:var(--r1);
+  padding:.5rem .75rem;min-width:11rem}
+.plist .choice.sel{border-color:var(--acc);background:var(--surface-2)}
+.plist .choice .cl{font-weight:600;font-size:.92rem}
+.plist .choice .ct{font-size:var(--fs-xs);color:var(--dim);
+  font-family:ui-monospace,Menlo,monospace}
+.plist .q{font-size:1rem}
+.plist .q small{font-size:.46rem}
 /* ---- the two verbs: gather / build, stated open ---------------------- */
 .verbs{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:0 0 1.5rem}
 .verb{display:block;background:var(--surface);border:1px solid var(--line);

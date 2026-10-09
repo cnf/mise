@@ -29,154 +29,238 @@
 
 
 {{define "assembly_view.html"}}{{template "head" .}}
+<div class="crumb"><a href="/assemblies">Assemblies</a> › {{.Assembly.Name}}</div>
 <h1>{{.Assembly.Name}}</h1>
-<p class="muted">{{.Assembly.Description}}</p>
+{{if .Assembly.Description}}<p class="lede">{{.Assembly.Description}}</p>{{end}}
 
 {{if .Imported}}<p class="ok small">imported {{.Imported}} components from the board.</p>{{end}}
 {{if .ImportErr}}<p class="warn small">the board was imported, but its layout could not be attached to the manual: {{.ImportErr}}</p>{{end}}
 
-<div class="modebar">
-  {{if .Edit}}
-    <span class="tag mode-on">editing</span>
-    <a href="/assemblies/{{.Assembly.ID}}"><button class="ghost" type="button">Done — read only</button></a>
-  {{else}}
-    <a href="/assemblies/{{.Assembly.ID}}?edit=1"><button class="ghost" type="button">Edit contents</button></a>
-  {{end}}
-  <a href="/gather/{{.Assembly.ID}}"><button class="ghost" type="button">Gather list</button></a>
-  <a href="/manuals/{{.Assembly.ID}}"><button class="ghost" type="button">Manual{{if .HasDocument}} &amp; board layout{{end}}</button></a>
+{{if .Edit}}<div class="modebar"><span class="tag mode-on">editing</span>
+  <span class="muted small">changes save as you go — the buttons below add, the × removes</span>
+  <span class="sp"></span>
+  <a href="/assemblies/{{.Assembly.ID}}"><button class="ghost" type="button">Done — read only</button></a>
+</div>{{end}}
+
+<div class="cards">
+  <div class="card"><b>{{.LineCount}}</b><span class="muted small">lines</span></div>
+  <div class="card"><b>{{.CompCount}}</b><span class="muted small">components</span></div>
+  <div class="card"><b>{{.SlotCount}}</b><span class="muted small">variant{{if ne .SlotCount 1}}s{{end}}</span></div>
+  {{if .Cost}}<div class="card"><b>{{.Cost}}</b><span class="muted small">est. cost</span></div>{{end}}
 </div>
 
-<h2>Contents</h2>
-{{if .Lines}}
-<table>
-<tr><th>Item</th><th>Type</th><th class="num">Qty</th><th class="num">Line total</th><th>Notes</th>{{if .Edit}}<th></th>{{end}}</tr>
-{{range .Lines}}
-<tr class="{{if .DNP}}dnp{{end}}">
-  <td>
-    {{if eq .ItemType "part"}}<a href="/parts/{{.PartID}}">{{.PartName}}</a>
-    {{else if eq .ItemType "assembly"}}<a href="/assemblies/{{.ChildAssemblyID}}">↳ {{.ChildName}}</a>
-    {{else}}<b>◈ {{.SlotName}}</b>{{end}}
-  </td>
-  <td>{{if eq .ItemType "part"}}<span class="tag">{{.PartKind}}</span>
-      {{else if eq .ItemType "assembly"}}<span class="tag">sub-assembly</span>
-      {{else}}<span class="tag">variant slot</span>{{end}}</td>
-  <td class="num">
-    {{if eq .ItemType "slot"}}<span class="muted">—</span>
-    {{else if $.Edit}}
-    <form method="post" action="/lines/{{.ID}}">
-      <input type="hidden" name="_action" value="update">
-      <input type="hidden" name="_back" value="{{$.Back}}?edit=1">
-      <input name="qty" value="{{trimNum .Qty}}" style="width:4.5rem">
-      <label class="small muted"><input type="checkbox" name="dnp" {{if .DNP}}checked{{end}}> DNP</label>
-      <button class="ghost">set</button>
-    </form>
-    {{else}}{{trimNum .Qty}}{{if .DNP}} <span class="tag">DNP</span>{{end}}{{end}}
-  </td>
-  <td class="num">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</td>
-  <td class="small muted">{{.Notes}}</td>
-  {{if $.Edit}}
-  <td class="num">
-    <form method="post" action="/lines/{{.ID}}">
-      <input type="hidden" name="_action" value="delete">
-      <input type="hidden" name="_back" value="{{$.Back}}?edit=1">
-      <button class="danger">×</button>
-    </form>
-  </td>
-  {{end}}
-</tr>
+{{if not .Edit}}
+<div class="verbs">
+  <a class="verb primary" href="/gather/{{.Assembly.ID}}">
+    <div class="vt">Gather the parts</div>
+    <div class="vd">The flattened pull list — every part summed up and grouped by the
+      sub-assembly that declares it, so you know which bag.</div>
+    <div class="go">open gather list →</div>
+  </a>
+  <a class="verb" href="/manuals/{{.Assembly.ID}}">
+    <div class="vt">Follow the build</div>
+    <div class="vd">{{if .StepCount}}The authored manual — {{.StepCount}} step{{if ne .StepCount 1}}s{{end}}{{if .HasDocument}}, with the board embedded and interactive{{end}}.{{else}}No manual authored for this assembly yet — open it to write the first step.{{end}}</div>
+    <div class="go">open manual →</div>
+  </a>
+</div>
+{{end}}
 
-{{if eq .ItemType "slot"}}
-<tr><td colspan="{{if $.Edit}}6{{else}}5{{end}}" style="padding-top:0">
-  <table style="margin:0">
-  <tr><th>Option</th><th>Target</th><th class="num">Qty</th><th>Notes</th>{{if $.Edit}}<th></th>{{end}}</tr>
-  {{range .Options}}
-  <tr>
-    <td>{{if .IsDefault}}<span class="tag">default</span> {{end}}{{.Label}}</td>
-    <td class="small">{{if eq .TargetType "part"}}<a href="/parts/{{.PartID}}">{{.PartName}}</a>{{else}}<a href="/assemblies/{{.ChildAssemblyID}}">↳ {{.ChildName}}</a>{{end}}</td>
-    <td class="num">{{trimNum .Qty}}</td>
-    <td class="small muted">{{.Notes}}</td>
-    {{if $.Edit}}
+<div class="card panel">
+  <div class="hd2"><h2>Contents</h2>
+    <span class="n">{{.LineCount}} lines · {{.CompCount}} components</span>
+    <span class="r">{{if not .Edit}}<a href="/assemblies/{{.Assembly.ID}}?edit=1">Edit contents</a>{{end}}</span>
+  </div>
+
+  {{if .Lines}}
+  {{if .Edit}}
+  <div class="pad">
+  <table>
+  <tr><th>Item</th><th>Type</th><th class="num">Qty</th><th class="num">Line total</th><th>Notes</th><th></th></tr>
+  {{range .Lines}}
+  <tr class="{{if .DNP}}dnp{{end}}">
+    <td>
+      {{if eq .ItemType "part"}}<a href="/parts/{{.PartID}}">{{.PartName}}</a>
+      {{else if eq .ItemType "assembly"}}<a href="/assemblies/{{.ChildAssemblyID}}">↳ {{.ChildName}}</a>
+      {{else}}<b>◈ {{.SlotName}}</b>{{end}}
+    </td>
+    <td>{{if eq .ItemType "part"}}<span class="tag">{{.PartKind}}</span>
+        {{else if eq .ItemType "assembly"}}<span class="tag">sub-assembly</span>
+        {{else}}<span class="tag">variant slot</span>{{end}}</td>
     <td class="num">
-      <form method="post" action="/options/{{.ID}}">
+      {{if eq .ItemType "slot"}}<span class="muted">—</span>
+      {{else}}
+      <form method="post" action="/lines/{{.ID}}">
+        <input type="hidden" name="_action" value="update">
+        <input type="hidden" name="_back" value="{{$.Back}}?edit=1">
+        <input name="qty" value="{{trimNum .Qty}}" style="width:4.5rem">
+        <label class="small muted"><input type="checkbox" name="dnp" {{if .DNP}}checked{{end}}> DNP</label>
+        <button class="ghost small" title="save this quantity and DNP flag">apply</button>
+      </form>
+      {{end}}
+    </td>
+    <td class="num">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</td>
+    <td class="small muted">{{.Notes}}</td>
+    <td class="num">
+      <form method="post" action="/lines/{{.ID}}">
         <input type="hidden" name="_action" value="delete">
         <input type="hidden" name="_back" value="{{$.Back}}?edit=1">
         <button class="danger">×</button>
       </form>
     </td>
-    {{end}}
   </tr>
+  {{if eq .ItemType "slot"}}
+  <tr><td colspan="6" style="padding-top:0">
+    <table style="margin:0">
+    <tr><th>Option</th><th>Target</th><th class="num">Qty</th><th>Notes</th><th></th></tr>
+    {{range .Options}}
+    <tr>
+      <td>{{if .IsDefault}}<span class="tag">default</span> {{end}}{{.Label}}</td>
+      <td class="small">{{if eq .TargetType "part"}}<a href="/parts/{{.PartID}}">{{.PartName}}</a>{{else}}<a href="/assemblies/{{.ChildAssemblyID}}">↳ {{.ChildName}}</a>{{end}}</td>
+      <td class="num">{{trimNum .Qty}}</td>
+      <td class="small muted">{{.Notes}}</td>
+      <td class="num">
+        <form method="post" action="/options/{{.ID}}">
+          <input type="hidden" name="_action" value="delete">
+          <input type="hidden" name="_back" value="{{$.Back}}?edit=1">
+          <button class="danger">×</button>
+        </form>
+      </td>
+    </tr>
+    {{end}}
+    {{if not .Options}}<tr><td colspan="5" class="muted small">No options yet — define at least one below, or the build cannot resolve this slot.</td></tr>{{end}}
+    </table>
+    <form class="inline" method="post" action="/slots/{{.SlotID}}">
+      <input type="hidden" name="_action" value="add_option">
+      <input type="hidden" name="_back" value="{{$.Back}}?edit=1">
+      <input name="label" placeholder="label (e.g. rev C)" style="width:9rem">
+      <select name="target_type" style="width:9rem" title="what the chosen option points at">
+        <option value="assembly">sub-assembly</option>
+        <option value="part">part</option>
+      </select>
+      <select name="child_assembly_id" style="width:18rem" title="used when the option is a sub-assembly">
+        <option value="" disabled selected>↳ pick a sub-assembly…</option>
+        {{range $.All}}{{if ne .ID $.Assembly.ID}}<option value="{{.ID}}">↳ {{.Name}}</option>{{end}}{{end}}
+      </select>
+      <select name="part_id" style="width:18rem" title="used when the option is a part">
+        <option value="" disabled selected>pick a part…</option>
+        {{range $.Parts}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      </select>
+      <input name="qty" value="1" style="width:4.5rem" title="qty of the option">
+      <input name="notes" placeholder="compatibility note" style="width:14rem">
+      <label class="small muted"><input type="checkbox" name="is_default"> default</label>
+      <button class="ghost small">Add option</button>
+    </form>
+    <script>
+    // Show only the target picker that matches the chosen target_type, so the
+    // add-option row is not two dropdowns where only one is read. Scoped to the
+    // row by walking up from the select, so several slot rows can coexist.
+    document.querySelectorAll('form[action^="/slots/"] select[name=target_type]').forEach(function(sel){
+      var form = sel.closest('form');
+      var asm = form.querySelector('select[name=child_assembly_id]');
+      var prt = form.querySelector('select[name=part_id]');
+      function sync(){
+        var isAsm = sel.value === 'assembly';
+        if (asm) asm.style.display = isAsm ? '' : 'none';
+        if (prt) prt.style.display = isAsm ? 'none' : '';
+      }
+      sel.addEventListener('change', sync); sync();
+    });
+    </script>
+    <form method="post" action="/slots/{{.SlotID}}" onsubmit="return confirm('Delete this slot and all its options?')">
+      <input type="hidden" name="_action" value="delete">
+      <input type="hidden" name="_back" value="{{$.Back}}?edit=1">
+      <button class="danger small" title="remove the whole slot, not just this option">Delete this slot</button>
+    </form>
+  </td></tr>
   {{end}}
-  {{if not .Options}}<tr><td colspan="5" class="muted small">No options yet{{if $.Edit}} — add one below{{end}}.</td></tr>{{end}}
+  {{end}}
   </table>
-
-  {{if $.Edit}}
-  <form class="inline" method="post" action="/slots/{{.SlotID}}">
-    <input type="hidden" name="_action" value="add_option">
-    <input type="hidden" name="_back" value="{{$.Back}}?edit=1">
-    <input name="label" placeholder="label (e.g. rev C)" style="width:9rem">
-    <select name="target_type" style="width:9rem">
-      <option value="assembly">sub-assembly</option>
-      <option value="part">part</option>
-    </select>
-    <select name="child_assembly_id" style="width:18rem">
-      {{range $.All}}{{if ne .ID $.Assembly.ID}}<option value="{{.ID}}">↳ {{.Name}}</option>{{end}}{{end}}
-    </select>
-    <select name="part_id" style="width:18rem">
-      {{range $.Parts}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-    </select>
-    <input name="qty" value="1" style="width:4.5rem" title="qty of the option">
-    <input name="notes" placeholder="compatibility note" style="width:14rem">
-    <label class="small muted"><input type="checkbox" name="is_default"> default</label>
-    <button class="ghost">Add option</button>
-  </form>
-  <form method="post" action="/slots/{{.SlotID}}" onsubmit="return confirm('Delete this slot and all its options?')">
-    <input type="hidden" name="_action" value="delete">
-    <input type="hidden" name="_back" value="{{$.Back}}?edit=1">
-    <button class="danger">Delete slot</button>
-  </form>
+  </div>
+  {{else}}
+  {{/* READ: the parts list, one chunky row per line. A slot becomes a chooser
+       card; a sub-assembly stays a link, because its contents are its own page. */}}
+  <ul class="plist">
+  {{range .Lines}}
+    {{if eq .ItemType "slot"}}
+      <li class="slotrow">
+        <div class="q">◈<small>SLOT</small></div>
+        <div>
+          <div class="nm">{{.SlotName}}</div>
+          <div class="sub">{{if .Notes}}{{.Notes}}{{else}}choose one of the alternatives{{end}}</div>
+          <div class="choices">
+            {{range .Options}}
+            <div class="choice{{if .IsDefault}} sel{{end}}">
+              <div class="cl">{{.Label}}{{if .IsDefault}} <span class="tag">default</span>{{end}}</div>
+              <div class="ct">{{if eq .TargetType "part"}}{{.PartName}}{{else}}↳ {{.ChildName}}{{end}} × {{trimNum .Qty}}</div>
+            </div>
+            {{end}}
+            {{if not .Options}}<div class="ct muted">no options defined yet</div>{{end}}
+          </div>
+        </div>
+        <div class="price"></div>
+      </li>
+    {{else if eq .ItemType "assembly"}}
+      <li>
+        <div class="q">↳<small>SUB</small></div>
+        <div><div class="nm"><a href="/assemblies/{{.ChildAssemblyID}}">{{.ChildName}}</a></div>
+          <div class="sub">sub-assembly{{if .Notes}} · {{.Notes}}{{end}}</div></div>
+        <div class="price">{{trimNum .Qty}}×</div>
+      </li>
+    {{else}}
+      <li class="{{if .DNP}}dnp{{end}}">
+        <div class="q">{{trimNum .Qty}}<small>{{if eq .Qty 1.0}}PC{{else}}PCS{{end}}</small></div>
+        <div><div class="nm"><a href="/parts/{{.PartID}}">{{.PartName}}</a>{{if .DNP}} <span class="tag">dnp</span>{{end}}</div>
+          <div class="sub"><span class="tag">{{.PartKind}}</span>{{if .Notes}} {{.Notes}}{{end}}{{if .PartDBID}} <span class="chip">part-db #{{.PartDBID}}</span>{{end}}</div></div>
+        <div class="price">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{else}}—{{end}}</div>
+      </li>
+    {{end}}
   {{end}}
-</td></tr>
-{{end}}
-{{end}}
-</table>
-{{else}}<p class="muted">Empty.{{if .Edit}} Add the first line below.{{end}}</p>{{end}}
+  </ul>
+  {{end}}
+  {{else}}<div class="pad"><p class="muted">Empty. {{if .Edit}}Add the first line below.{{else}}<a href="/assemblies/{{.Assembly.ID}}?edit=1">Add the first line</a>.{{end}}</p></div>{{end}}
+</div>
 
 {{if .Edit}}
-<h2>Add part</h2>
-<form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
-  <input type="hidden" name="_action" value="add_part">
-  <input type="hidden" name="_back" value="{{.Back}}?edit=1">
-  <input list="allparts" placeholder="type to filter…" style="width:14rem">
-  <select name="part_id" style="width:26rem">
-    {{range .Parts}}<option value="{{.ID}}">{{.Name}} — {{.Kind}}</option>{{end}}
-  </select>
-  <input name="qty" value="1" style="width:5rem" title="quantity">
-  <button>Add</button>
-</form>
-<datalist id="allparts">{{range .Parts}}<option value="{{.Name}}"></option>{{end}}</datalist>
+<div class="card panel">
+  <div class="hd2"><h2>Add to this assembly</h2><span class="n">editing</span></div>
+  <div class="pad">
+  <h3>Part</h3>
+  <form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
+    <input type="hidden" name="_action" value="add_part">
+    <input type="hidden" name="_back" value="{{.Back}}?edit=1">
+    <input list="allparts" placeholder="type to filter…" style="width:14rem">
+    <select name="part_id" style="width:26rem">
+      {{range .Parts}}<option value="{{.ID}}">{{.Name}} — {{.Kind}}</option>{{end}}
+    </select>
+    <input name="qty" value="1" style="width:5rem" title="quantity">
+    <button>Add part</button>
+  </form>
+  <datalist id="allparts">{{range .Parts}}<option value="{{.Name}}"></option>{{end}}</datalist>
 
-<h2>Add sub-assembly</h2>
-<form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
-  <input type="hidden" name="_action" value="add_sub">
-  <input type="hidden" name="_back" value="{{.Back}}?edit=1">
-  <select name="child_assembly_id" style="width:26rem">
-    {{range .All}}{{if ne .ID $.Assembly.ID}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
-  </select>
-  <input name="qty" value="1" style="width:5rem" title="quantity">
-  <button>Add</button>
-</form>
+  <h3>Sub-assembly</h3>
+  <p class="muted small">The parts inside it are pulled in when you gather, multiplied by this quantity.</p>
+  <form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
+    <input type="hidden" name="_action" value="add_sub">
+    <input type="hidden" name="_back" value="{{.Back}}?edit=1">
+    <select name="child_assembly_id" style="width:26rem">
+      {{range .All}}{{if ne .ID $.Assembly.ID}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+    </select>
+    <input name="qty" value="1" style="width:5rem" title="quantity">
+    <button>Add sub-assembly</button>
+  </form>
 
-<h2>Add variant slot</h2>
-<p class="muted small">A slot is a point where the builder picks one of several
-alternatives — “this frame takes PCB rev A, B or C”. Options are added to the slot
-after it exists.</p>
-<form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
-  <input type="hidden" name="_action" value="add_slot">
-  <input type="hidden" name="_back" value="{{.Back}}?edit=1">
-  <input name="slot_name" placeholder="slot name (e.g. PCB)" style="width:16rem" required>
-  <input name="slot_notes" placeholder="compatibility note shown on the gather list" style="width:26rem">
-  <button>Add slot</button>
-</form>
+  <h3>Variant slot</h3>
+  <p class="muted small">A point where the builder picks one of several alternatives —
+    “this frame takes PCB rev A, B or C”. Add the options to the slot after it exists.</p>
+  <form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
+    <input type="hidden" name="_action" value="add_slot">
+    <input type="hidden" name="_back" value="{{.Back}}?edit=1">
+    <input name="slot_name" placeholder="slot name (e.g. PCB)" style="width:16rem" required>
+    <input name="slot_notes" placeholder="compatibility note shown on the gather list" style="width:26rem">
+    <button>Add slot</button>
+  </form>
+  </div>
+</div>
 
 <form method="post" action="/assemblies/{{.Assembly.ID}}" onsubmit="return confirm('Delete this assembly and its lines?')">
   <input type="hidden" name="_action" value="delete">
