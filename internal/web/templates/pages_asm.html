@@ -288,52 +288,59 @@
 {{define "gatherbody"}}
 {{if .Errors}}<p class="err small">{{range .Errors}}{{.}}<br>{{end}}</p>{{end}}
 
+<div class="cards">
+  <div class="card"><b>{{len .Total}}</b><span class="muted small">distinct parts</span></div>
+  <div class="card"><b>{{len .Groups}}</b><span class="muted small">bag{{if ne (len .Groups) 1}}s{{end}}</span></div>
+  {{range $cur, $sum := .TotalCost}}<div class="card"><b>{{printf "%.2f" $sum}}</b><span class="muted small">{{$cur}} est. cost</span></div>{{end}}
+</div>
+
 {{if .Slots}}
-<h2>Variants used</h2>
-<table>
-<tr><th>Slot</th><th>Choice</th><th>Resolves to</th><th>Note</th></tr>
-{{range .Slots}}
-<tr class="{{if .Unresolved}}err{{end}}">
-  <td>{{.SlotName}} <span class="muted small">in {{.Assembly}}</span></td>
-  <td>{{if .Unresolved}}<span class="err">unresolved</span>{{else if .IsDefault}}{{.Label}} <span class="tag">default</span>{{else}}{{.Label}}{{end}}</td>
-  <td class="muted small">{{.Target}}</td>
-  <td class="small warn">{{.Note}}</td>
-</tr>
-{{end}}
-</table>
+<div class="card panel">
+  <div class="hd2"><h2>Variants used</h2><span class="n">{{len .Slots}}</span></div>
+  <ul class="plist">
+  {{range .Slots}}
+    <li class="slotrow">
+      <div class="q">◈<small>SLOT</small></div>
+      <div>
+        <div class="nm">{{.SlotName}} <span class="muted small">in {{.Assembly}}</span></div>
+        <div class="sub">{{if .Unresolved}}<span class="err">unresolved — no option chosen</span>{{else}}{{.Label}} → {{.Target}}{{end}}{{if .Note}} · <span class="warn">{{.Note}}</span>{{end}}</div>
+      </div>
+      <div>{{if .IsDefault}}<span class="tag">default</span>{{end}}</div>
+    </li>
+  {{end}}
+  </ul>
+</div>
 {{end}}
 
 {{range .Groups}}{{if .Lines}}
-<h2>{{.AssemblyName}}</h2>
-<table>
-<tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">total</th></tr>
-{{range .Lines}}
-<tr>
-  <td>{{.Name}}</td>
-  <td><span class="tag">{{.Kind}}</span></td>
-  <td class="num">{{trimNum .Qty}}</td>
-  <td class="num">{{price .UnitPrice}}</td>
-  <td class="num">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</td>
-</tr>
-{{end}}
-</table>
+<div class="card panel">
+  <div class="hd2"><h2>{{.AssemblyName}}</h2><span class="n">{{len .Lines}} part{{if ne (len .Lines) 1}}s{{end}}</span></div>
+  <ul class="plist">
+  {{range .Lines}}
+    <li>
+      <div class="q">{{trimNum .Qty}}<small>×</small></div>
+      <div><div class="nm">{{.Name}}</div><div class="sub"><span class="tag">{{.Kind}}</span>{{if .UnitPrice}} {{price .UnitPrice}} {{.Currency}} each{{end}}</div></div>
+      <div class="num muted small">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</div>
+    </li>
+  {{end}}
+  </ul>
+</div>
 {{end}}{{end}}
 
-<h2>Total</h2>
-<table>
-<tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">total</th></tr>
-{{range .Total}}
-<tr>
-  <td>{{.Name}}</td><td><span class="tag">{{.Kind}}</span></td>
-  <td class="num">{{trimNum .Qty}}</td>
-  <td class="num">{{price .UnitPrice}}</td>
-  <td class="num">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</td>
-</tr>
-{{end}}
-</table>
-<p class="muted">
-{{range $cur, $sum := .TotalCost}}<b>{{printf "%.2f" $sum}} {{$cur}}</b> {{end}}
-</p>
+<details class="card panel">
+  <summary class="hd2"><h2>Total — one line per part</h2><span class="n">{{len .Total}}</span><span class="r">show</span></summary>
+  <table>
+  <tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">total</th></tr>
+  {{range .Total}}
+  <tr>
+    <td>{{.Name}}</td><td><span class="tag">{{.Kind}}</span></td>
+    <td class="num">{{trimNum .Qty}}</td>
+    <td class="num">{{price .UnitPrice}}</td>
+    <td class="num">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</td>
+  </tr>
+  {{end}}
+  </table>
+</details>
 {{end}}
 
 

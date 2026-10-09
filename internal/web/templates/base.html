@@ -159,6 +159,9 @@ form.inline{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5re
   font-family:ui-monospace,Menlo,monospace}
 .plist .q{font-size:1rem}
 .plist .q small{font-size:.46rem}
+details.card>summary{cursor:pointer;list-style:none}
+details.card>summary::-webkit-details-marker{display:none}
+details.card[open]>summary .r{visibility:hidden}
 /* ---- the two verbs: gather / build, stated open ---------------------- */
 .verbs{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:0 0 1.5rem}
 .verb{display:block;background:var(--surface);border:1px solid var(--line);
