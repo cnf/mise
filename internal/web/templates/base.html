@@ -34,7 +34,6 @@
   --acc-hover:#ff8533;
   --link:#0098ff;         /* links and focus rings */
   --link-hover:#4db8ff;
-  --link-visited:#8fb4e3; /* visited, kept legible */
   --ok:#7fd18b;
   --warn:#e3b341;
   --err:#f0766b;
@@ -52,10 +51,11 @@ body{margin:0;background:var(--bg);color:var(--fg);
   -webkit-font-smoothing:antialiased}
 /* Links are the primary affordance and appear in almost every table cell, so
    their colour is set here rather than left to the browser default (which was
-   #0000EE unvisited / #551A8B visited — both unreadable on this background). */
+   #0000EE unvisited / #551A8B visited — both unreadable on this background).
+   There is deliberately no separate visited-link colour: visited-ness is not useful in an app,
+   and the author `a` rule above already overrides the browser's visited colour. */
 a{color:var(--link);text-decoration:none}
 a:hover{color:var(--link-hover);text-decoration:underline}
-a:visited{color:var(--link-visited)}
 ::placeholder{color:var(--faint)}
 ::selection{background:var(--acc);color:var(--on-acc)}
 :focus-visible{outline:2px solid var(--link);outline-offset:1px}
@@ -185,7 +185,7 @@ details.card[open]>summary .r{visibility:hidden}
   border-radius:var(--r2);padding:1rem 1.15rem}
 .verb.primary{background:linear-gradient(135deg,var(--surface-2),var(--surface));
   border-color:var(--line-strong)}
-.verb,.verb:visited{color:var(--fg)}
+.verb{color:var(--fg)}
 .verb .vt{font-size:1.05rem;font-weight:700;margin-bottom:.2rem}
 .verb .vd{color:var(--dim);font-size:.88rem}
 .verb .go{margin-top:.6rem;font-size:.8rem;color:var(--acc);font-weight:600}

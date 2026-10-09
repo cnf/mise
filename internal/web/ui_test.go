@@ -102,7 +102,7 @@ func mustHex(t *testing.T, s string) [3]float64 {
 // Thresholds are WCAG AA: 4.5:1 for body text, 3:1 for large text/UI.
 func TestTokenContrast(t *testing.T) {
 	tok := rootTokens(t)
-	for _, need := range []string{"--bg", "--fg", "--dim", "--faint", "--acc", "--link", "--on-acc", "--link-visited", "--ok", "--warn", "--err", "--surface-2", "--line"} {
+	for _, need := range []string{"--bg", "--fg", "--dim", "--faint", "--acc", "--link", "--on-acc", "--ok", "--warn", "--err", "--surface-2", "--line"} {
 		if _, ok := tok[need]; !ok {
 			t.Fatalf("token %s is missing from :root", need)
 		}
@@ -116,7 +116,6 @@ func TestTokenContrast(t *testing.T) {
 		{"body text (--fg on --bg)", mustHex(t, tok["--fg"]), bg, 7.0},
 		{"secondary text (--dim on --bg)", mustHex(t, tok["--dim"]), bg, 4.5},
 		{"link (--link on --bg)", mustHex(t, tok["--link"]), bg, 4.5},
-		{"visited link (--link-visited on --bg)", mustHex(t, tok["--link-visited"]), bg, 4.5},
 		{"accent as text (--acc on --bg)", mustHex(t, tok["--acc"]), bg, 4.5},
 		{"button label (--on-acc on --acc)", mustHex(t, tok["--on-acc"]), mustHex(t, tok["--acc"]), 4.5},
 		{"ok (--ok on --bg)", mustHex(t, tok["--ok"]), bg, 4.5},
@@ -174,7 +173,7 @@ func TestContentLinksAreStyled(t *testing.T) {
 	if !regexp.MustCompile(`(?m)^a\s*\{[^}]*color:var\(--link\)`).MatchString(sheet) {
 		t.Error("no bare `a{color:var(--link)}` rule: content links would fall back to the browser default (#0000EE, ~1.9:1 here)")
 	}
-	if !strings.Contains(sheet, "a:visited{color:var(--link-visited)}") {
-		t.Error("no visited-link colour: the browser default purple is ~1.6:1 on this background")
+	if strings.Contains(sheet, "a:visited") {
+		t.Error("a:visited rule found: links are one colour on purpose, visited or not")
 	}
 }
