@@ -11,31 +11,33 @@
    the whole app follows. The enforced pairings are checked by ui_test.go
    (TestTokenContrast / TestNoRawHexOutsideTokens).
 
-   The register is "workbench": warm dark surfaces, one amber accent, rounded
+   The register is "workbench": cool graphite surfaces, orange for actions and blue for links, rounded
    cards. Dark by intent — this is a tool you look at with the lights on in a
    shed, not a document. */
 :root{
   /* surfaces, darkest first */
-  --bg:#1a1714;
-  --surface:#241f1a;      /* cards, inputs, wells */
-  --surface-2:#2e2822;    /* raised chips: tags, step numbers, quiet buttons */
+  --bg:#13161a;
+  --surface:#1b1f25;      /* cards, inputs, wells */
+  --surface-2:#252b33;    /* raised chips: tags, step numbers, quiet buttons */
   --paper:#ffffff;        /* light surface for embedded documents */
-  --line:#3a322a;         /* borders, dividers */
-  --line-strong:#4a4036;  /* emphasised borders */
+  --line:#303740;         /* borders, dividers */
+  --line-strong:#434c58;  /* emphasised borders */
   /* text, brightest first */
-  --fg:#f2ece4;
-  --dim:#c2b4a2;          /* secondary text: 8.79:1 on --bg */
-  --faint:#9a8c78;      /* placeholders and de-emphasised meta: 5.44:1 on --bg,
+  --fg:#eef1f5;
+  --dim:#b6bfca;          /* secondary text: 8.79:1 on --bg */
+  --faint:#8d98a6;      /* placeholders and de-emphasised meta: 5.44:1 on --bg,
                            and still 4.43:1 on --surface-2 (the old #847766 was
                            4.09:1 — below AA, and used for table headers) */
-  --on-acc:#231603;       /* text on an accent background */
+  --on-acc:#1a0b00;       /* text on an accent background */
   /* semantic */
-  --acc:#f0a541;          /* primary action, links, active nav; 8.64:1 on --bg */
-  --acc-hover:#ffc06a;
-  --acc-visited:#cba76a;  /* visited, kept legible */
-  --ok:#8fce7d;
-  --warn:#e8a13a;
-  --err:#e5776b;
+  --acc:#ff6700;          /* primary action, active nav, step numbers */
+  --acc-hover:#ff8533;
+  --link:#0098ff;         /* links and focus rings */
+  --link-hover:#4db8ff;
+  --link-visited:#8fb4e3; /* visited, kept legible */
+  --ok:#7fd18b;
+  --warn:#e3b341;
+  --err:#f0766b;
   /* space */
   --s1:.25rem; --s2:.5rem; --s3:.75rem; --s4:1rem; --s5:1.5rem;
   /* radius */
@@ -51,12 +53,12 @@ body{margin:0;background:var(--bg);color:var(--fg);
 /* Links are the primary affordance and appear in almost every table cell, so
    their colour is set here rather than left to the browser default (which was
    #0000EE unvisited / #551A8B visited — both unreadable on this background). */
-a{color:var(--acc);text-decoration:none}
-a:hover{color:var(--acc-hover);text-decoration:underline}
-a:visited{color:var(--acc-visited)}
+a{color:var(--link);text-decoration:none}
+a:hover{color:var(--link-hover);text-decoration:underline}
+a:visited{color:var(--link-visited)}
 ::placeholder{color:var(--faint)}
 ::selection{background:var(--acc);color:var(--on-acc)}
-:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+:focus-visible{outline:2px solid var(--link);outline-offset:1px}
 /* ---- chrome: a warm tool bar. Nav items carry the live counts so the bar
    is an instrument, not just navigation. -------------------------------- */
 header{display:flex;align-items:center;gap:1.4rem;padding:.65rem 1.3rem;
@@ -131,7 +133,7 @@ form.inline{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5re
 .chip{display:inline-block;background:var(--surface-2);color:var(--dim);
   border-radius:99px;padding:.1rem .55rem;font-size:var(--fs-xs);
   letter-spacing:.05em;text-transform:uppercase}
-.chip.acc{background:rgba(240,165,65,.16);color:var(--acc)}
+.chip.acc{background:rgba(255,103,0,.16);color:var(--acc)}
 /* ---- cards ----------------------------------------------------------- */
 .cards{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);
@@ -183,6 +185,7 @@ details.card[open]>summary .r{visibility:hidden}
   border-radius:var(--r2);padding:1rem 1.15rem}
 .verb.primary{background:linear-gradient(135deg,var(--surface-2),var(--surface));
   border-color:var(--line-strong)}
+.verb,.verb:visited{color:var(--fg)}
 .verb .vt{font-size:1.05rem;font-weight:700;margin-bottom:.2rem}
 .verb .vd{color:var(--dim);font-size:.88rem}
 .verb .go{margin-top:.6rem;font-size:.8rem;color:var(--acc);font-weight:600}
