@@ -1,19 +1,22 @@
 {{define "assemblies.html"}}{{template "head" .}}
 <h1>Assemblies</h1>
-<form class="inline" method="get" action="/assemblies/new"><button>New assembly</button></form>
+<p class="lede">Each assembly is a bill of parts and sub-assemblies. Open one to gather its parts or follow its manual.</p>
+<div class="modebar"><span class="muted small">{{len .Rows}} assembl{{if eq (len .Rows) 1}}y{{else}}ies{{end}}</span><span class="sp"></span>
+<a href="/ibom/import"><button class="ghost" type="button">Import iBOM</button></a>
+<a href="/assemblies/new"><button>New assembly</button></a></div>
 {{if .Rows}}
-<table>
-<tr><th>Name</th><th>Description</th><th class="num">Lines</th><th class="num">Slots</th><th></th></tr>
+<div class="card panel"><table>
+<tr><th>Name</th><th>Description</th><th class="num">Lines</th><th class="num">Variants</th><th></th></tr>
 {{range .Rows}}
 <tr>
   <td><a href="/assemblies/{{.ID}}">{{.Name}}</a></td>
   <td class="muted small">{{.Description}}</td>
   <td class="num">{{.LineCount}}</td>
   <td class="num">{{if .SlotCount}}{{.SlotCount}}{{end}}</td>
-  <td class="num"><a class="small" href="/gather/{{.ID}}">gather</a></td>
+  <td class="num small"><a href="/gather/{{.ID}}">gather</a> · <a href="/manuals/{{.ID}}">manual</a></td>
 </tr>
 {{end}}
-</table>
+</table></div>
 {{else}}<p class="muted">None yet.</p>{{end}}
 {{template "foot" .}}{{end}}
 
@@ -271,8 +274,11 @@
 
 
 {{define "gather.html"}}{{template "head" .}}
+<div class="crumb"><a href="/assemblies">Assemblies</a> › <a href="/assemblies/{{.Gather.RootID}}">{{.Gather.RootName}}</a> › Gather</div>
 <h1>Gather: {{.Gather.RootName}}</h1>
-<p><a class="small" href="/export/gather/{{.Gather.RootID}}">download CSV</a></p>
+<p class="lede">Everything to pull before you start, grouped by the sub-assembly that declares it.</p>
+<div class="modebar"><a href="/manuals/{{.Gather.RootID}}"><button class="ghost" type="button">Follow the build →</button></a>
+<span class="sp"></span><a href="/export/gather/{{.Gather.RootID}}"><button class="ghost" type="button">Download CSV</button></a></div>
 {{template "gatherbody" .Gather}}
 {{template "foot" .}}{{end}}
 
@@ -295,7 +301,7 @@
 </table>
 {{end}}
 
-{{range .Groups}}
+{{range .Groups}}{{if .Lines}}
 <h2>{{.AssemblyName}}</h2>
 <table>
 <tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">total</th></tr>
@@ -309,7 +315,7 @@
 </tr>
 {{end}}
 </table>
-{{end}}
+{{end}}{{end}}
 
 <h2>Total</h2>
 <table>
@@ -331,37 +337,37 @@
 
 {{define "builds.html"}}{{template "head" .}}
 <h1>Builds</h1>
-<p class="muted small">A build is the frozen answer to “assemble this one: what do I need”.
-Pick your variants, freeze it, and the list stops moving.</p>
+<p class="lede">A build is a saved version of an assembly: pick your variants, freeze it, and the list stops moving.</p>
 {{if .Builds}}
-<table>
-<tr><th>#</th><th>Name</th><th>Assembly</th><th>Frozen</th></tr>
+<div class="card panel"><table>
+<tr><th>Name</th><th>Assembly</th><th>State</th></tr>
 {{range .Builds}}
 <tr>
-  <td><a href="/builds/{{.ID}}">{{.ID}}</a></td>
-  <td>{{if .Name}}{{.Name}}{{else}}<span class="muted">unnamed</span>{{end}}</td>
+  <td><a href="/builds/{{.ID}}">{{if .Name}}{{.Name}}{{else}}Build {{.ID}}{{end}}</a></td>
   <td class="muted small">{{index $.AsmNames .AssemblyID}}</td>
-  <td>{{if .FrozenAt}}<span class="ok small">{{.FrozenAt}}</span>{{else}}<span class="muted small">live</span>{{end}}</td>
+  <td>{{if .FrozenAt}}<span class="ok small">frozen {{.FrozenAt}}</span>{{else}}<span class="muted small">live</span>{{end}}</td>
 </tr>
 {{end}}
-</table>
+</table></div>
 {{end}}
-
-<h2>New build</h2>
-<form class="inline" method="post" action="/builds">
+<div class="card panel">
+<div class="hd2"><h2>New build</h2></div>
+<div class="pad"><form class="inline" method="post" action="/builds">
   <input name="name" placeholder="name (e.g. Club rev C)" style="width:18rem">
   <select name="assembly_id" style="width:24rem">
     {{range .Assemblies}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
   </select>
   <button>Create</button>
-</form>
+</form></div></div>
 {{template "foot" .}}{{end}}
 
 
 {{define "build_view.html"}}{{template "head" .}}
-<h1>Build {{.Build.ID}}{{if .Build.Name}} — {{.Build.Name}}{{end}}</h1>
-<p class="muted">root assembly: <a href="/assemblies/{{.Assembly.ID}}">{{.Assembly.Name}}</a>
-{{if .Build.FrozenAt}} · <span class="ok">frozen {{.Build.FrozenAt}}</span>{{end}}</p>
+<div class="crumb"><a href="/builds">Builds</a> › {{if .Build.Name}}{{.Build.Name}}{{else}}Build {{.Build.ID}}{{end}}</div>
+<h1>{{if .Build.Name}}{{.Build.Name}}{{else}}Build {{.Build.ID}}{{end}}</h1>
+<p class="lede">of <a href="/assemblies/{{.Assembly.ID}}">{{.Assembly.Name}}</a>
+{{if .Build.FrozenAt}} · <span class="ok">frozen {{.Build.FrozenAt}}</span>{{else}} · live, not frozen{{end}}</p>
+<div class="modebar"><a href="/manuals/{{.Assembly.ID}}?build={{.Build.ID}}"><button class="ghost" type="button">Follow the build →</button></a></div>
 
 {{if .SlotViews}}
 <h2>Variants</h2>
@@ -388,7 +394,7 @@ can use the same hardware with a different variant.</p>
       </select>
     </form>
   </td>
-  <td class="muted small">{{$sel := .Selected}}{{range .Options}}{{if eq $sel .ID}}{{.Notes}}{{end}}{{end}}</td>
+  <td class="muted small">{{$sel := .Selected}}{{range .Options}}{{if or (eq $sel .ID) (and (eq $sel 0) .IsDefault)}}{{.TargetName}}{{end}}{{end}}</td>
 </tr>
 {{end}}
 </table>
@@ -420,13 +426,13 @@ reproduced exactly even after the assemblies change.</p>
 
 
 {{define "ibom_import.html"}}{{template "head" .}}
+<div class="crumb"><a href="/assemblies">Assemblies</a> › Import iBOM</div>
 <h1>Import iBOM</h1>
-<p class="muted">Upload a KiCad InteractiveHtmlBom file. Its embedded data (refdes, value,
-footprint) is decoded directly — no browser needed — and the board becomes an assembly of
-its components.</p>
+<p class="lede">Upload a KiCad InteractiveHtmlBom file. Its embedded data is decoded directly — no browser needed — and the board becomes an assembly of its components, with the interactive board attached to its manual.</p>
+<div class="card panel"><div class="pad">
 <form method="post" action="/ibom/import" enctype="multipart/form-data">
   <div class="row"><label>iBOM file</label><input type="file" name="ibom" accept=".html" required></div>
   <div class="row"><label>Assembly name</label><input name="assembly_name" placeholder="PCB (defaults to the board title)" style="width:26rem"></div>
   <p><button>Import</button></p>
-</form>
+</form></div></div>
 {{template "foot" .}}{{end}}

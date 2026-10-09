@@ -1,61 +1,74 @@
 {{define "home.html"}}{{template "head" .}}
-<p class="muted">Lay out what you need, then build it.</p>
-<div class="cards">
-  <div class="card"><b>{{.PartCount}}</b><span class="muted">parts</span></div>
-  <div class="card"><b>{{.AsmCount}}</b><span class="muted">assemblies</span></div>
-  <div class="card"><b>{{.BuildCount}}</b><span class="muted">builds</span></div>
+<h1>What are you making?</h1>
+<p class="lede">Two questions, in order: what do I need to gather, and how do I put it together.</p>
+<div class="verbs">
+  <a class="verb primary" href="/assemblies">
+    <div class="vt">Gather the parts</div>
+    <div class="vd">Pick an assembly and get the flat pull list, grouped by the sub-assembly that declares each part.</div>
+    <div class="go">{{.AsmCount}} assembl{{if eq .AsmCount 1}}y{{else}}ies{{end}} →</div>
+  </a>
+  <a class="verb" href="/builds">
+    <div class="vt">Follow a build</div>
+    <div class="vd">A build is a saved version: your variants chosen, frozen, with the manual resolved to match.</div>
+    <div class="go">{{.BuildCount}} build{{if ne .BuildCount 1}}s{{end}} →</div>
+  </a>
 </div>
 
-<h2>Assemblies</h2>
-{{if .Assemblies}}
-<table>
-<tr><th>Name</th><th>Description</th><th></th></tr>
-{{range .Assemblies}}
-<tr>
-  <td><a href="/assemblies/{{.ID}}">{{.Name}}</a></td>
-  <td class="muted small">{{.Description}}</td>
-  <td class="num"><a class="small" href="/gather/{{.ID}}">gather list</a></td>
-</tr>
-{{end}}
-</table>
-{{else}}<p class="muted">None yet. <a href="/assemblies/new">Create one</a> or <a href="/ibom/import">import an iBOM</a>.</p>{{end}}
+<div class="card panel">
+  <div class="hd2"><h2>Assemblies</h2><span class="n">{{.AsmCount}}</span>
+    <span class="r"><a href="/assemblies/new">New</a> · <a href="/ibom/import">Import iBOM</a></span></div>
+  {{if .Assemblies}}
+  <table>
+  {{range .Assemblies}}
+  <tr><td><a href="/assemblies/{{.ID}}">{{.Name}}</a></td>
+    <td class="muted small">{{.Description}}</td>
+    <td class="num small"><a href="/gather/{{.ID}}">gather</a> · <a href="/manuals/{{.ID}}">manual</a></td></tr>
+  {{end}}
+  </table>
+  {{else}}<div class="pad muted">None yet — create one or import an iBOM.</div>{{end}}
+</div>
 
-<h2>Builds</h2>
-{{if .Builds}}
-<table>
-<tr><th>#</th><th>Name</th><th>Frozen</th></tr>
-{{range .Builds}}
-<tr><td><a href="/builds/{{.ID}}">{{.ID}}</a></td><td>{{if .Name}}{{.Name}}{{else}}<span class="muted">unnamed</span>{{end}}</td>
-<td>{{if .FrozenAt}}<span class="ok small">{{.FrozenAt}}</span>{{else}}<span class="muted small">live</span>{{end}}</td></tr>
-{{end}}
-</table>
-{{else}}<p class="muted">No builds yet.</p>{{end}}
+<div class="card panel">
+  <div class="hd2"><h2>Builds</h2><span class="n">{{.BuildCount}}</span><span class="r"><a href="/builds">All builds</a></span></div>
+  {{if .Builds}}
+  <table>
+  {{range .Builds}}
+  <tr><td><a href="/builds/{{.ID}}">{{if .Name}}{{.Name}}{{else}}Build {{.ID}}{{end}}</a></td>
+  <td class="num">{{if .FrozenAt}}<span class="ok small">frozen {{.FrozenAt}}</span>{{else}}<span class="muted small">live</span>{{end}}</td></tr>
+  {{end}}
+  </table>
+  {{else}}<div class="pad muted">No builds yet.</div>{{end}}
+</div>
 
-<h2>Recently added parts</h2>
-{{if .Parts}}
-<table>
-<tr><th>Name</th><th>Kind</th><th class="num">Unit price</th></tr>
-{{range $i, $p := .Parts}}{{if lt $i 10}}
-<tr><td><a href="/parts/{{$p.ID}}">{{$p.Name}}</a></td><td><span class="tag">{{$p.Kind}}</span></td>
-<td class="num">{{price $p.UnitPrice}} {{if $p.UnitPrice}}{{$p.Currency}}{{end}}</td></tr>
-{{end}}{{end}}
-</table>
-{{else}}<p class="muted">No parts yet.</p>{{end}}
+<div class="card panel">
+  <div class="hd2"><h2>Parts</h2><span class="n">{{.PartCount}}</span><span class="r"><a href="/parts">All parts</a></span></div>
+  {{if .Parts}}
+  <table>
+  {{range $i, $p := .Parts}}{{if lt $i 8}}
+  <tr><td><a href="/parts/{{$p.ID}}">{{$p.Name}}</a></td><td><span class="tag">{{$p.Kind}}</span></td>
+  <td class="num">{{price $p.UnitPrice}} {{if $p.UnitPrice}}{{$p.Currency}}{{end}}</td></tr>
+  {{end}}{{end}}
+  </table>
+  {{else}}<div class="pad muted">No parts yet.</div>{{end}}
+</div>
 {{template "foot" .}}{{end}}
 
 
 {{define "parts.html"}}{{template "head" .}}
-<h1>Parts <span class="muted small">({{len .Parts}})</span></h1>
-{{if .Q}}<p class="small muted">search: “{{.Q}}”</p>{{end}}
+<h1>Parts</h1>
+<p class="lede">The global part list — hardware, printed parts and Part-DB-linked components. Read-only against Part-DB.</p>
+<div class="modebar">
 <form class="inline" method="get" action="/parts">
   <input name="q" value="{{.Q}}" placeholder="search name / description / attrs" style="width:20rem">
   <button>Search</button>
-  <a href="/parts"><button class="ghost" type="button">Clear</button></a>
+  {{if .Q}}<a href="/parts"><button class="ghost" type="button">Clear</button></a>{{end}}
 </form>
-<form class="inline" method="get" action="/parts/new"><button>New part</button></form>
-
+<span class="sp"></span>
+<span class="muted small">{{len .Parts}} part{{if ne (len .Parts) 1}}s{{end}}{{if .Q}} matching “{{.Q}}”{{end}}</span>
+<a href="/parts/new"><button>New part</button></a>
+</div>
 {{if .Parts}}
-<table>
+<div class="card panel"><table>
 <tr><th>Name</th><th>Kind</th><th>Description</th><th class="num">Unit</th><th>Part-DB</th><th></th></tr>
 {{range .Parts}}
 <tr>
@@ -70,7 +83,7 @@
   </td>
 </tr>
 {{end}}
-</table>
+</table></div>
 {{else}}<p class="muted">No parts match.</p>{{end}}
 {{template "foot" .}}{{end}}
 
@@ -126,14 +139,20 @@ let t;q.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(async()=>{
 
 
 {{define "part_view.html"}}{{template "head" .}}
+<div class="crumb"><a href="/parts">Parts</a> › {{.Part.Name}}</div>
 <h1>{{.Part.Name}}</h1>
 <p><span class="tag">{{.Part.Kind}}</span>
 {{if .Part.UnitPrice}}<span class="muted">· {{price .Part.UnitPrice}} {{.Part.Currency}}</span>{{end}}
 {{if .Part.PartDBID}}<span class="tag">Part-DB #{{.Part.PartDBID}}</span>{{end}}</p>
-{{if .Part.Description}}<p>{{.Part.Description}}</p>{{end}}
-{{if .Part.VendorURL}}<p><a href="{{.Part.VendorURL}}" target="_blank" rel="noopener">vendor page</a></p>{{end}}
-{{if .Part.DatasheetURL}}<p><a href="{{.Part.DatasheetURL}}" target="_blank" rel="noopener">datasheet</a></p>{{end}}
-{{if .Part.Attrs}}{{if ne .Part.Attrs "{}"}}<h2>Attrs</h2><pre class="small muted">{{.Part.Attrs}}</pre>{{end}}{{end}}
-{{if .Part.Notes}}<h2>Notes</h2><p>{{.Part.Notes}}</p>{{end}}
-<p><a href="/parts/{{.Part.ID}}/edit"><button>Edit</button></a> <a href="/parts"><button class="ghost" type="button">Back</button></a></p>
+{{if .Part.Description}}<p class="lede">{{.Part.Description}}</p>{{end}}
+<div class="card panel">
+  <div class="hd2"><h2>Details</h2><span class="r"><a href="/parts/{{.Part.ID}}/edit">Edit part</a></span></div>
+  <div class="pad">
+  {{if .Part.VendorURL}}<p><a href="{{.Part.VendorURL}}" target="_blank" rel="noopener">vendor page</a></p>{{end}}
+  {{if .Part.DatasheetURL}}<p><a href="{{.Part.DatasheetURL}}" target="_blank" rel="noopener">datasheet</a></p>{{end}}
+  {{if .Part.Attrs}}{{if ne .Part.Attrs "{}"}}<h3>Attrs</h3><pre class="small muted">{{.Part.Attrs}}</pre>{{end}}{{end}}
+  {{if .Part.Notes}}<h3>Notes</h3><p>{{.Part.Notes}}</p>{{end}}
+  {{if not (or .Part.VendorURL .Part.DatasheetURL .Part.Notes)}}<p class="muted small">No vendor link, datasheet or notes yet.</p>{{end}}
+  </div>
+</div>
 {{template "foot" .}}{{end}}
