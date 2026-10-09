@@ -89,7 +89,9 @@
 
 
 {{define "part_edit.html"}}{{template "head" .}}
+<div class="crumb"><a href="/parts">Parts</a> › {{if .Part.ID}}<a href="/parts/{{.Part.ID}}">{{.Part.Name}}</a> › Edit{{else}}New{{end}}</div>
 <h1>{{if .Part.ID}}Edit part{{else}}New part{{end}}</h1>
+<div class="card panel"><div class="pad">
 <form method="post" action="{{if .Part.ID}}/parts/{{.Part.ID}}/edit{{else}}/parts/new{{end}}">
   <div class="row"><label>Name *</label><input name="name" value="{{.Part.Name}}" required style="width:28rem"></div>
   <div class="row"><label>Kind</label>
@@ -110,7 +112,7 @@
   <div class="row"><label>Attrs (JSON)</label><input name="attrs" value="{{.Part.Attrs}}" style="width:34rem"></div>
   <div class="row"><label>Notes</label><textarea name="notes">{{.Part.Notes}}</textarea></div>
   <p><button>Save</button> <a href="/parts"><button class="ghost" type="button">Cancel</button></a></p>
-</form>
+</form></div></div>
 {{if .Part.ID}}
 <form method="post" action="/parts/{{.Part.ID}}" onsubmit="return confirm('Delete this part?')">
   <input type="hidden" name="_action" value="delete">

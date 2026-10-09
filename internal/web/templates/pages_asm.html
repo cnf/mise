@@ -22,12 +22,14 @@
 
 
 {{define "assembly_edit.html"}}{{template "head" .}}
+<div class="crumb"><a href="/assemblies">Assemblies</a> › {{if .Assembly.ID}}<a href="/assemblies/{{.Assembly.ID}}">{{.Assembly.Name}}</a> › Edit{{else}}New{{end}}</div>
 <h1>{{if .Assembly.ID}}Edit assembly{{else}}New assembly{{end}}</h1>
+<div class="card panel"><div class="pad">
 <form method="post" action="{{if .Assembly.ID}}/assemblies/{{.Assembly.ID}}/edit{{else}}/assemblies/new{{end}}">
   <div class="row"><label>Name *</label><input name="name" value="{{.Assembly.Name}}" required style="width:28rem"></div>
   <div class="row"><label>Description</label><input name="description" value="{{.Assembly.Description}}" style="width:34rem"></div>
   <p><button>Save</button> <a href="/assemblies"><button class="ghost" type="button">Cancel</button></a></p>
-</form>
+</form></div></div>
 {{template "foot" .}}{{end}}
 
 
