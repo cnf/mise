@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"sort"
@@ -40,6 +41,7 @@ func main() {
 		"trimNum": trimNum,
 		"price":   func(p *float64) string { return strFmt(p) },
 		"mul":     func(p *float64, q float64) string { return mulFmt(p, q) },
+		"inc":     func(i int) int { return i + 1 },
 	}).ParseFS(templateFiles, "templates/*.html")
 	if err != nil {
 		log.Fatalf("templates: %v", err)
@@ -66,6 +68,11 @@ func main() {
 	mux.HandleFunc("/partdb/sync", s.partdbSync)
 	mux.HandleFunc("/api/partdb/search", s.partdbSearchAPI)
 	mux.HandleFunc("/ibom/import", s.ibomImport)
+	mux.HandleFunc("/manuals/", s.manualByID)
+	mux.HandleFunc("/steps/new", s.stepNew)
+	mux.HandleFunc("/steps/upload", s.imageUpload)
+	mux.HandleFunc("/steps/", s.stepByID)
+	mux.HandleFunc("/images/", s.imageByID)
 
 	log.Printf("mise listening on %s (db=%s)", *addr, *dbPath)
 	log.Fatal(http.ListenAndServe(*addr, mux))
@@ -741,7 +748,269 @@ func (s *server) ibomImport(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "ibom_import.html", map[string]any{})
 }
 
-// ---------- helpers ----------
+// ---------- manual ----------
+
+// manualByID renders the authored manual for one assembly. With no query string
+// it edits the assembly's own steps; ?build=N or ?sel=slot:option,... renders it
+// as a build would follow it, resolving variant references.
+func (s *server) manualByID(w http.ResponseWriter, r *http.Request) {
+	id, err := idFromPath(r.URL.Path, "/manuals/")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	a, err := getAssembly(s.db, id)
+	if err != nil || a == nil {
+		http.NotFound(w, r)
+		return
+	}
+	sel := Selection{}
+	label := ""
+	if bs := r.URL.Query().Get("build"); bs != "" {
+		if bid, err := strconv.ParseInt(bs, 10, 64); err == nil {
+			if b, err := getBuild(s.db, bid); err == nil && b != nil {
+				sel = parseSelection(b.Selections)
+				label = "build: " + orDefault(b.Name, fmt.Sprintf("#%d", b.ID))
+			}
+		}
+	}
+	m, err := manual(s.db, id, sel)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	parts, _ := listParts(s.db, "")
+	all, _ := listAssemblies(s.db)
+	slots, _ := listSlots(s.db, id)
+	s.render(w, "manual_view.html", map[string]any{
+		"Assembly": a, "Manual": m, "Parts": parts, "All": all,
+		"Slots": slots, "Label": label, "BuildQuery": r.URL.Query().Get("build"),
+		"Back": "/assemblies/" + strconv.FormatInt(id, 10),
+	})
+}
+
+func (s *server) stepByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	id, err := idFromPath(r.URL.Path, "/steps/")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	back := orDefault(r.FormValue("_back"), "/")
+	st, err := getStep(s.db, id)
+	if err != nil || st == nil {
+		http.NotFound(w, r)
+		return
+	}
+	switch r.FormValue("_action") {
+	case "delete":
+		if err := deleteStep(s.db, id); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	case "update":
+		st.Title = r.FormValue("title")
+		st.Body = r.FormValue("body")
+		if err := updateStep(s.db, st); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	case "up":
+		if err := moveStep(s.db, id, -1); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	case "down":
+		if err := moveStep(s.db, id, 1); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
+}
+
+// addStepHandler is called from the manual view with the owning assembly.
+func (s *server) stepNew(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	assemblyID := parseOptInt(r.FormValue("assembly_id"))
+	if assemblyID == nil {
+		http.Error(w, "assembly_id required", 400)
+		return
+	}
+	back := orDefault(r.FormValue("_back"), "/manuals/"+strconv.FormatInt(*assemblyID, 10))
+	st := &Step{
+		AssemblyID: *assemblyID,
+		ItemType:   orDefault(r.FormValue("item_type"), "note"),
+		Title:      r.FormValue("title"),
+		Body:       r.FormValue("body"),
+	}
+	switch st.ItemType {
+	case "note":
+	case "assembly":
+		st.ChildAssemblyID = parseOptInt(r.FormValue("child_assembly_id"))
+		if st.ChildAssemblyID == nil {
+			http.Error(w, "pick a sub-assembly", 400)
+			return
+		}
+		if *st.ChildAssemblyID == *assemblyID {
+			http.Error(w, "a step cannot follow its own assembly", 400)
+			return
+		}
+		if err := wouldCycleManual(s.db, *assemblyID, *st.ChildAssemblyID); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+	case "slot":
+		st.SlotID = parseOptInt(r.FormValue("slot_id"))
+		if st.SlotID == nil {
+			http.Error(w, "pick a slot", 400)
+			return
+		}
+		sl, err := getSlot(s.db, *st.SlotID)
+		if err != nil || sl == nil || sl.AssemblyID != *assemblyID {
+			http.Error(w, "slot does not belong to this assembly", 400)
+			return
+		}
+	default:
+		http.Error(w, "unknown step type", 400)
+		return
+	}
+	if _, err := addStep(s.db, st); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
+}
+
+func (s *server) imageByID(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/images/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method == http.MethodPost {
+		_ = r.ParseForm()
+		back := orDefault(r.FormValue("_back"), "/")
+		if r.FormValue("_action") == "delete" {
+			if err := deleteImage(s.db, id); err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+		}
+		http.Redirect(w, r, back, http.StatusSeeOther)
+		return
+	}
+	data, mime, err := imageBytes(s.db, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write(data)
+}
+
+// imageUpload stores one or more images against a step.
+func (s *server) imageUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseMultipartForm(maxImageBytes + (1 << 20)); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	stepID := parseOptInt(r.FormValue("step_id"))
+	if stepID == nil {
+		http.Error(w, "step_id required", 400)
+		return
+	}
+	back := orDefault(r.FormValue("_back"), "/")
+	fhs := r.MultipartForm.File["image"]
+	if len(fhs) == 0 {
+		http.Error(w, "no file", 400)
+		return
+	}
+	var failures []string
+	for _, fh := range fhs {
+		f, err := fh.Open()
+		if err != nil {
+			failures = append(failures, fh.Filename+": "+err.Error())
+			continue
+		}
+		data, err := io.ReadAll(io.LimitReader(f, maxImageBytes+1))
+		f.Close()
+		if err != nil {
+			failures = append(failures, fh.Filename+": "+err.Error())
+			continue
+		}
+		mime := fh.Header.Get("Content-Type")
+		if mime == "" || !imageMimes[mime] {
+			mime = http.DetectContentType(data)
+		}
+		if _, err := addImage(s.db, *stepID, fh.Filename, mime, data, r.FormValue("caption")); err != nil {
+			failures = append(failures, fh.Filename+": "+err.Error())
+		}
+	}
+	if len(failures) > 0 {
+		http.Error(w, strings.Join(failures, "; "), 400)
+		return
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
+}
+
+// wouldCycleManual mirrors wouldCycle for manual step references.
+func wouldCycleManual(db *sql.DB, parent, child int64) error {
+	seen := map[int64]bool{}
+	var walk func(id int64, depth int) bool
+	walk = func(id int64, depth int) bool {
+		if id == parent {
+			return true
+		}
+		if depth > 64 || seen[id] {
+			return false
+		}
+		seen[id] = true
+		rows, err := db.Query(`SELECT child_assembly_id FROM manual_step WHERE assembly_id=? AND item_type='assembly' AND child_assembly_id IS NOT NULL`, id)
+		if err != nil {
+			return false
+		}
+		var kids []int64
+		for rows.Next() {
+			var c int64
+			if rows.Scan(&c) == nil {
+				kids = append(kids, c)
+			}
+		}
+		rows.Close()
+		for _, c := range kids {
+			if walk(c, depth+1) {
+				return true
+			}
+		}
+		return false
+	}
+	if walk(child, 0) {
+		return fmt.Errorf("adding this would create a circular manual reference")
+	}
+	return nil
+}
 
 // slotsUnder returns every slot reachable from an assembly by walking both
 // sub-assembly lines and slot options, deduplicated, in tree order. The build

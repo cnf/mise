@@ -35,6 +35,24 @@ are concurrent alternatives at one point. Two builds can share one assembly tree
 differ only in which option each slot resolves to — that is what makes "the same
 hardware, but rev C" a named, reproducible thing.
 
+## The manual
+
+Each assembly carries an ordered list of **steps**. A step is one of:
+
+- **note** — a title, free text, and any number of images.
+- **assembly** — "follow this sub-assembly's manual". Its steps are attached inline,
+  so the manual tree is the same tree as the BOM. A reference that points back up
+  the tree is marked and not followed, rather than recursing.
+- **slot** — follow whichever variant the *build* chose. This is the seam between
+  phases 2 and 3: the same manual reads differently for rev A and rev B.
+
+Steps can be reordered (↑/↓, swapping sort order), and images are stored in the
+database (capped at 10 MiB, png/jpeg/gif/webp only) and served from `/images/{id}`.
+
+Preview a manual as a specific build with `/manuals/{assembly_id}?build={build_id}`.
+With no build it shows the assembly's own steps with variant references unresolved
+to a selection, i.e. the slot's default.
+
 ## Migrations
 
 `db.go` holds an ordered migration list; applied steps are recorded in a
@@ -93,5 +111,6 @@ templates/     server-rendered pages (html/template)
 
 ## Not in this phase
 
-The authored assembly manual (BUILD mode: steps, images, recursive sub-assembly
-references) and PDF export. See `/data/plans/assembly-bom-and-manual.md`.
+- Embedding the iBOM itself as a step's content (phase 4) — for now a PCB's manual
+  is authored like any other, and the iBOM is a separate file.
+- PDF export (deliberately never).

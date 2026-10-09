@@ -159,6 +159,45 @@ DROP TABLE assembly_line;
 ALTER TABLE assembly_line_new RENAME TO assembly_line;
 CREATE INDEX IF NOT EXISTS idx_line_assembly ON assembly_line(assembly_id);
 `},
+
+	// 003 adds the authored manual: ordered steps per assembly, optional images,
+	// and steps that pull in a sub-assembly's (or a slot's chosen) manual. A step
+	// carries the same item_type shape as an assembly line, so the manual tree
+	// resolves variant choices exactly the way the gather does.
+	{"003_manual", `
+CREATE TABLE IF NOT EXISTS manual_step (
+  id                INTEGER PRIMARY KEY,
+  assembly_id       INTEGER NOT NULL REFERENCES assembly(id) ON DELETE CASCADE,
+  sort              INTEGER NOT NULL DEFAULT 0,
+  item_type         TEXT NOT NULL CHECK (item_type IN ('note','assembly','slot')),
+  title             TEXT NOT NULL DEFAULT '',
+  body              TEXT NOT NULL DEFAULT '',
+  child_assembly_id INTEGER REFERENCES assembly(id) ON DELETE RESTRICT,
+  slot_id           INTEGER REFERENCES variant_slot(id) ON DELETE RESTRICT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  CHECK (
+    (item_type = 'note'     AND child_assembly_id IS NULL     AND slot_id IS NULL) OR
+    (item_type = 'assembly' AND child_assembly_id IS NOT NULL AND slot_id IS NULL) OR
+    (item_type = 'slot'     AND slot_id IS NOT NULL           AND child_assembly_id IS NULL)
+  ),
+  CHECK (child_assembly_id IS NULL OR child_assembly_id <> assembly_id)
+);
+CREATE INDEX IF NOT EXISTS idx_step_assembly ON manual_step(assembly_id);
+
+CREATE TABLE IF NOT EXISTS step_image (
+  id         INTEGER PRIMARY KEY,
+  step_id    INTEGER NOT NULL REFERENCES manual_step(id) ON DELETE CASCADE,
+  sort       INTEGER NOT NULL DEFAULT 0,
+  filename   TEXT NOT NULL DEFAULT '',
+  mime       TEXT NOT NULL DEFAULT '',
+  caption    TEXT NOT NULL DEFAULT '',
+  size       INTEGER NOT NULL DEFAULT 0,
+  bytes      BLOB NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_image_step ON step_image(step_id);
+`},
 }
 
 // openDB opens (creating if needed) the SQLite database at path and applies any

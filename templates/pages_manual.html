@@ -1,0 +1,123 @@
+{{define "manual_view.html"}}{{template "head" .}}
+<h1>Manual: {{.Assembly.Name}}</h1>
+<p class="muted">
+  <a href="/gather/{{.Assembly.ID}}">gather list</a> ·
+  <a href="/assemblies/{{.Assembly.ID}}">assembly</a>
+  {{if .Label}} · viewing as <b>{{.Label}}</b>{{end}}
+</p>
+
+<form class="inline" method="get" action="/manuals/{{.Assembly.ID}}">
+  <label class="muted small">preview as:</label>
+  <input name="build" value="{{.BuildQuery}}" placeholder="build id" style="width:7rem">
+  <button class="ghost">Show</button>
+  <span class="muted small">empty = this assembly's own steps, unresolved variants</span>
+</form>
+
+{{template "manualsteps" .Manual}}
+
+<h2>Add a step</h2>
+<form method="post" action="/steps/new">
+  <input type="hidden" name="assembly_id" value="{{.Assembly.ID}}">
+  <input type="hidden" name="_back" value="/manuals/{{.Assembly.ID}}">
+  <div class="row"><label>Type</label>
+    <select name="item_type">
+      <option value="note">note — text + photos</option>
+      <option value="assembly">follow a sub-assembly's manual</option>
+      <option value="slot">follow whichever variant is chosen</option>
+    </select>
+  </div>
+  <div class="row"><label>Title</label><input name="title" style="width:34rem"></div>
+  <div class="row"><label>Body</label><textarea name="body"></textarea></div>
+  <div class="row"><label>Sub-assembly</label>
+    <select name="child_assembly_id" style="width:26rem">
+      <option value="">— none —</option>
+      {{range .All}}{{if ne .ID $.Assembly.ID}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+    </select>
+  </div>
+  <div class="row"><label>Slot</label>
+    <select name="slot_id" style="width:26rem">
+      <option value="">— none —</option>
+      {{range .Slots}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+  </div>
+  <p><button>Add step</button></p>
+</form>
+{{template "foot" .}}{{end}}
+
+
+{{define "manualsteps"}}
+{{if not .Steps}}<p class="muted">No steps yet.</p>{{end}}
+{{$aid := .AssemblyID}}
+{{range $i, $s := .Steps}}
+<div class="step">
+  <div class="stepnum">{{inc $i}}</div>
+  <div class="stepbody">
+    <div class="steptitle">
+      {{if $s.Title}}{{$s.Title}}{{else}}<span class="muted">untitled</span>{{end}}
+      {{if eq $s.ItemType "assembly"}}<span class="tag">follows “{{$s.ChildName}}”</span>{{end}}
+      {{if eq $s.ItemType "slot"}}<span class="tag">variant: {{$s.SlotName}}{{if $s.ChosenLabel}} → {{$s.ChosenLabel}}{{end}}</span>{{end}}
+    </div>
+    {{if $s.Body}}<div class="steptext">{{$s.Body}}</div>{{end}}
+
+    {{range $s.Images}}
+    <figure>
+      <img src="/images/{{.ID}}" alt="{{.Caption}}">
+      {{if .Caption}}<figcaption class="muted small">{{.Caption}}</figcaption>{{end}}
+      <form method="post" action="/images/{{.ID}}">
+        <input type="hidden" name="_action" value="delete">
+        <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+        <button class="danger small">remove image</button>
+      </form>
+    </figure>
+    {{end}}
+
+    {{if $s.Reference}}
+      {{if $s.Reference.Loop}}
+        <p class="warn small">↻ this reference points back up the tree and is not followed</p>
+      {{else}}
+        <div class="submanual">
+          <div class="muted small">▸ sub-manual: {{$s.Reference.Title}}</div>
+          {{template "manualsteps" $s.Reference}}
+        </div>
+      {{end}}
+    {{else if eq $s.ItemType "slot"}}
+      <p class="muted small">(this slot resolves to a part or an unset option — nothing to follow)</p>
+    {{end}}
+
+    <form method="post" action="/steps/{{$s.ID}}" class="inline small">
+      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+      <input type="hidden" name="_action" value="up">
+      <button class="ghost small">↑</button>
+    </form>
+    <form method="post" action="/steps/{{$s.ID}}" class="inline small">
+      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+      <input type="hidden" name="_action" value="down">
+      <button class="ghost small">↓</button>
+    </form>
+    <form method="post" action="/steps/{{$s.ID}}" class="inline small">
+      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+      <input type="hidden" name="_action" value="delete">
+      <button class="danger small">delete</button>
+    </form>
+
+    <form method="post" action="/steps/upload" enctype="multipart/form-data" class="inline small">
+      <input type="hidden" name="step_id" value="{{$s.ID}}">
+      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+      <input type="file" name="image" accept="image/*">
+      <input name="caption" placeholder="caption" style="width:12rem">
+      <button class="ghost small">add image</button>
+    </form>
+
+    {{if eq $s.ItemType "note"}}
+    <form method="post" action="/steps/{{$s.ID}}" class="small">
+      <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+      <input type="hidden" name="_action" value="update">
+      <input name="title" value="{{$s.Title}}" placeholder="title" style="width:20rem">
+      <textarea name="body">{{$s.Body}}</textarea>
+      <button class="ghost small">save text</button>
+    </form>
+    {{end}}
+  </div>
+</div>
+{{end}}
+{{end}}

@@ -17,6 +17,7 @@ func parseTemplates(t *testing.T) *template.Template {
 		"trimNum": trimNum,
 		"price":   func(p *float64) string { return strFmt(p) },
 		"mul":     func(p *float64, q float64) string { return mulFmt(p, q) },
+		"inc":     func(i int) int { return i + 1 },
 	}).ParseFS(templateFiles, "templates/*.html")
 	if err != nil {
 		t.Fatalf("template parse: %v", err)
