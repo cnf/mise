@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"example.com/cnf/mise/internal/xdg"
 )
 
 type PdbRef struct {
@@ -76,11 +78,11 @@ func partDBConfig() (base, key string, err error) {
 	}
 	keyFile := os.Getenv("PARTDB_APIKEY_FILE")
 	if keyFile == "" {
-		keyFile = "partdb_apikey"
+		keyFile = xdg.APIKeyPath()
 	}
 	raw, err := os.ReadFile(keyFile)
 	if err != nil {
-		return "", "", fmt.Errorf("read api key %s: %w", keyFile, err)
+		return "", "", fmt.Errorf("read api key %s (put it there, or set PARTDB_APIKEY_FILE): %w", keyFile, err)
 	}
 	key = strings.TrimSpace(string(raw))
 	if key == "" {

@@ -6,6 +6,7 @@ partdb_apikey
 # build artifacts
 /mise
 /bin/
+/result
 *.db
 *.db-shm
 *.db-wal

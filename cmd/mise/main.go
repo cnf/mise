@@ -5,18 +5,25 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"example.com/cnf/mise/internal/store"
 	"example.com/cnf/mise/internal/web"
+	"example.com/cnf/mise/internal/xdg"
 )
 
 func main() {
 	var (
 		addr   = flag.String("addr", ":8080", "listen address")
-		dbPath = flag.String("db", "mise.db", "path to sqlite database")
+		dbPath = flag.String("db", xdg.DBPath(), "path to sqlite database")
 	)
 	flag.Parse()
 
+	// The default lives under $XDG_DATA_HOME; make sure its directory exists.
+	if err := os.MkdirAll(filepath.Dir(*dbPath), 0o700); err != nil {
+		log.Fatalf("data dir: %v", err)
+	}
 	db, err := store.OpenDB(*dbPath)
 	if err != nil {
 		log.Fatalf("db: %v", err)

@@ -73,15 +73,30 @@ keeps its rows through the upgrade.
 
 ## Running
 
-Everything runs through devenv (Go toolchain + sqlite):
+With Nix (flake):
 
 ```sh
-devenv shell --no-tui -- bash -c 'go build -o mise ./cmd/mise && ./mise -db mise.db'
+nix run .            # build and serve on :8080
+nix build .          # ./result/bin/mise
+nix develop          # dev shell: go, gotools, sqlite, git
 ```
 
-Then open <http://localhost:8080>.
+Or through devenv (`devenv shell --no-tui -- bash -c 'go run ./cmd/mise'`). Then
+open <http://localhost:8080>.
 
-Flags: `-addr` (default `:8080`), `-db` (default `mise.db`).
+Files follow the XDG Base Directory spec:
+
+| what | default | override |
+|---|---|---|
+| database | `$XDG_DATA_HOME/mise/mise.db` (`~/.local/share/mise/mise.db`) | `-db` |
+| Part-DB key | `$XDG_CONFIG_HOME/mise/partdb_apikey` (`~/.config/mise/partdb_apikey`) | `PARTDB_APIKEY_FILE` |
+
+The data directory is created on first run. Flags: `-addr` (default `:8080`), `-db`.
+
+The flake's source is an allow-list (`go.mod`, `go.sum`, `cmd/`, `internal/`), so a
+stray database or the key can never be copied into the Nix store. After changing
+Go dependencies, update `vendorHash` in `flake.nix` (set it to `lib.fakeHash`, build,
+and paste the hash Nix reports).
 
 ## Part-DB
 
@@ -90,12 +105,12 @@ and matches against that, because Part-DB's `/api/parts` filters on exact fields
 only — there is no free-text query — and the dataset is small enough that a full
 sweep is cheap and works offline afterwards. Press **Sync Part-DB** in the header.
 
-Configuration comes from the environment (see `devenv.nix`):
+Configuration comes from the environment (`devenv.nix` points the key at a local file for development):
 
 | var | default |
 |---|---|
 | `PARTDB_BASE_URL` | `https://parts.home.nullsense.net/api` |
-| `PARTDB_APIKEY_FILE` | `partdb_apikey` |
+| `PARTDB_APIKEY_FILE` | `$XDG_CONFIG_HOME/mise/partdb_apikey` |
 
 The key file is gitignored and never committed.
 
