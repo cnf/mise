@@ -42,9 +42,10 @@ type ibomData struct {
 }
 
 // importIBOM decodes an ibom.html and creates (or reuses) an assembly for the
-// board, returning the assembly id plus the number of parts imported. Each
-// distinct (value, footprint) pair becomes a part; each refdes becomes a line so
-// the board expands to its true component count.
+// board, returning the assembly id plus the number of components imported.
+// Components that share a value and footprint become ONE part and ONE line with
+// an aggregated count and the designators as its note (e.g. "C3, C4, C19"),
+// rather than a line per reference designator.
 //
 // The caller also keeps the file itself: the board layout is the reason you
 // imported it, so it belongs on the manual too (see the import handler).
@@ -98,10 +99,26 @@ func importIBOM(db *sql.DB, raw []byte, name string) (int64, int, error) {
 		skipped[s] = true
 	}
 
-	// group every bom group member by its field index so one component part
-	// record serves all reference designators that share value+footprint.
-	byField := map[int][]string{}
+	// bom.both already groups components that share a value and footprint: each
+	// group is a slice of [refdes, fieldIndex] pairs (e.g. [[C3,1],[C4,50],
+	// [C19,22]] is one 1µF part placed three times). Walk the groups and emit
+	// one line per group — do NOT key by field index, because several field
+	// indices share identical fields and that splits one part into many lines
+	// with qty=1 each.
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback()
+
+	imported := 0
+	sort := 0
 	for _, group := range data.Bom.Both {
+		// the group's field index is the same for every member; a group whose
+		// members are all skipped (DNP) is dropped.
+		fi := -1
+		var refs []string
+		allSkipped := true
 		for _, entry := range group {
 			if len(entry) != 2 {
 				continue
@@ -111,20 +128,15 @@ func importIBOM(db *sql.DB, raw []byte, name string) (int64, int, error) {
 			if !ok || !ok2 {
 				continue
 			}
-			byField[int(fiF)] = append(byField[int(fiF)], ref)
+			if fi < 0 {
+				fi = int(fiF)
+			}
+			refs = append(refs, ref)
+			if !skipped[int(fiF)] {
+				allSkipped = false
+			}
 		}
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		return 0, 0, err
-	}
-	defer tx.Rollback()
-
-	imported := 0
-	sort := 0
-	for fi, refs := range byField {
-		if skipped[fi] {
+		if len(refs) == 0 || allSkipped || (fi >= 0 && skipped[fi]) {
 			continue
 		}
 		fields := data.Bom.Fields[fmt.Sprintf("%d", fi)]
