@@ -1,0 +1,209 @@
+{{define "assemblies.html"}}{{template "head" .}}
+<h1>Assemblies</h1>
+<form class="inline" method="get" action="/assemblies/new"><button>New assembly</button></form>
+{{if .Rows}}
+<table>
+<tr><th>Name</th><th>Description</th><th class="num">Lines</th><th></th></tr>
+{{range .Rows}}
+<tr>
+  <td><a href="/assemblies/{{.ID}}">{{.Name}}</a></td>
+  <td class="muted small">{{.Description}}</td>
+  <td class="num">{{.LineCount}}</td>
+  <td class="num"><a class="small" href="/gather/{{.ID}}">gather</a></td>
+</tr>
+{{end}}
+</table>
+{{else}}<p class="muted">None yet.</p>{{end}}
+{{template "foot" .}}{{end}}
+
+
+{{define "assembly_edit.html"}}{{template "head" .}}
+<h1>{{if .Assembly.ID}}Edit assembly{{else}}New assembly{{end}}</h1>
+<form method="post" action="{{if .Assembly.ID}}/assemblies/{{.Assembly.ID}}/edit{{else}}/assemblies/new{{end}}">
+  <div class="row"><label>Name *</label><input name="name" value="{{.Assembly.Name}}" required style="width:28rem"></div>
+  <div class="row"><label>Description</label><input name="description" value="{{.Assembly.Description}}" style="width:34rem"></div>
+  <p><button>Save</button> <a href="/assemblies"><button class="ghost" type="button">Cancel</button></a></p>
+</form>
+{{template "foot" .}}{{end}}
+
+
+{{define "assembly_view.html"}}{{template "head" .}}
+<h1>{{.Assembly.Name}}</h1>
+<p class="muted">{{.Assembly.Description}}</p>
+<p>
+  <a href="/gather/{{.Assembly.ID}}"><button>Gather list</button></a>
+  <a href="/assemblies/{{.Assembly.ID}}/edit"><button class="ghost" type="button">Edit name</button></a>
+</p>
+
+<h2>Contents</h2>
+{{if .Lines}}
+<table>
+<tr><th>Item</th><th>Type</th><th class="num">Qty</th><th class="num">Line total</th><th>Notes</th><th></th></tr>
+{{range .Lines}}
+<tr class="{{if .DNP}}dnp{{end}}">
+  <td>
+    {{if eq .ItemType "part"}}<a href="/parts/{{.PartID}}">{{.PartName}}</a>
+    {{else}}<a href="/assemblies/{{.ChildAssemblyID}}">↳ {{.ChildName}}</a>{{end}}
+  </td>
+  <td>{{if eq .ItemType "part"}}<span class="tag">{{.PartKind}}</span>{{else}}<span class="tag">sub-assembly</span>{{end}}</td>
+  <td class="num">
+    <form method="post" action="/lines/{{.ID}}">
+      <input type="hidden" name="_action" value="update">
+      <input type="hidden" name="_back" value="{{$.Back}}">
+      <input name="qty" value="{{trimNum .Qty}}" style="width:4.5rem">
+      <label class="small muted"><input type="checkbox" name="dnp" {{if .DNP}}checked{{end}}> DNP</label>
+      <button class="ghost">set</button>
+    </form>
+  </td>
+  <td class="num">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</td>
+  <td class="small muted">{{.Notes}}</td>
+  <td class="num">
+    <form method="post" action="/lines/{{.ID}}">
+      <input type="hidden" name="_action" value="delete">
+      <input type="hidden" name="_back" value="{{$.Back}}">
+      <button class="danger">×</button>
+    </form>
+  </td>
+</tr>
+{{end}}
+</table>
+{{else}}<p class="muted">Empty.</p>{{end}}
+
+<h2>Add part</h2>
+<form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
+  <input type="hidden" name="_action" value="add_part">
+  <input list="allparts" name="part_search" placeholder="type to filter…" style="width:16rem">
+  <select name="part_id" style="width:26rem">
+    {{range .Parts}}<option value="{{.ID}}">{{.Name}} — {{.Kind}}</option>{{end}}
+  </select>
+  <input name="qty" value="1" style="width:5rem" title="quantity">
+  <button>Add</button>
+</form>
+<datalist id="allparts">{{range .Parts}}<option value="{{.Name}}"></option>{{end}}</datalist>
+
+<h2>Add sub-assembly</h2>
+<form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
+  <input type="hidden" name="_action" value="add_sub">
+  <select name="child_assembly_id" style="width:26rem">
+    {{range .All}}{{if ne .ID $.Assembly.ID}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+  </select>
+  <input name="qty" value="1" style="width:5rem" title="quantity">
+  <button>Add</button>
+</form>
+
+<form method="post" action="/assemblies/{{.Assembly.ID}}" onsubmit="return confirm('Delete this assembly and its lines?')">
+  <input type="hidden" name="_action" value="delete">
+  <button class="danger">Delete assembly</button>
+</form>
+{{template "foot" .}}{{end}}
+
+
+{{define "gather.html"}}{{template "head" .}}
+<h1>Gather: {{.Gather.RootName}}</h1>
+<p><a class="small" href="/export/gather/{{.Gather.RootID}}">download CSV</a></p>
+{{if .Gather.Errors}}<p class="err small">{{range .Gather.Errors}}{{.}}<br>{{end}}</p>{{end}}
+
+{{range .Gather.Groups}}
+<h2>{{.AssemblyName}}</h2>
+<table>
+<tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Line</th><th class="num">total</th></tr>
+{{range .Lines}}
+<tr>
+  <td>{{if .PartDBID}}<a href="/parts/{{.PartID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
+  <td><span class="tag">{{.Kind}}</span></td>
+  <td class="num">{{trimNum .Qty}}</td>
+  <td class="num">{{price .UnitPrice}}</td>
+  <td class="num">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</td>
+</tr>
+{{end}}
+</table>
+{{end}}
+
+<h2>Total</h2>
+<table>
+<tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Line</th><th class="num">total</th></tr>
+{{range .Gather.Total}}
+<tr>
+  <td>{{.Name}}</td><td><span class="tag">{{.Kind}}</span></td>
+  <td class="num">{{trimNum .Qty}}</td>
+  <td class="num">{{price .UnitPrice}}</td>
+  <td class="num">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</td>
+</tr>
+{{end}}
+</table>
+<p class="muted">
+{{range $cur, $sum := .Gather.TotalCost}}<b>{{printf "%.2f" $sum}} {{$cur}}</b> {{end}}
+</p>
+{{template "foot" .}}{{end}}
+
+
+{{define "builds.html"}}{{template "head" .}}
+<h1>Builds</h1>
+<p class="muted small">A build is the frozen answer to “assemble this one: what do I need”. Freeze it and the list stops moving.</p>
+{{if .Builds}}
+<table>
+<tr><th>#</th><th>Name</th><th>Assembly</th><th>Frozen</th></tr>
+{{range .Builds}}
+<tr>
+  <td><a href="/builds/{{.ID}}">{{.ID}}</a></td>
+  <td>{{if .Name}}{{.Name}}{{else}}<span class="muted">unnamed</span>{{end}}</td>
+  <td class="muted small">{{index $.AsmNames .AssemblyID}}</td>
+  <td>{{if .FrozenAt}}<span class="ok small">{{.FrozenAt}}</span>{{else}}<span class="muted small">live</span>{{end}}</td>
+</tr>
+{{end}}
+</table>
+{{end}}
+
+<h2>New build</h2>
+<form class="inline" method="post" action="/builds">
+  <input name="name" placeholder="name (e.g. Club rev C)" style="width:18rem">
+  <select name="assembly_id" style="width:24rem">
+    {{range .Assemblies}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+  </select>
+  <button>Create</button>
+</form>
+{{template "foot" .}}{{end}}
+
+
+{{define "build_view.html"}}{{template "head" .}}
+<h1>Build {{.Build.ID}}{{if .Build.Name}} — {{.Build.Name}}{{end}}</h1>
+<p class="muted">root assembly: <a href="/assemblies/{{.Assembly.ID}}">{{.Assembly.Name}}</a>
+{{if .Build.FrozenAt}} · <span class="ok">frozen {{.Build.FrozenAt}}</span>{{end}}</p>
+
+<form method="post" action="/builds/{{.Build.ID}}">
+  <input type="hidden" name="_action" value="freeze">
+  <button>{{if .Build.FrozenAt}}Re-freeze{{else}}Freeze{{end}}</button>
+</form>
+<p><a class="small" href="/export/gather/{{.Assembly.ID}}">download CSV</a></p>
+
+<h2>Gather list (live)</h2>
+{{template "gathertable" .Gather}}
+{{if .Frozen}}
+<h2>Frozen snapshot</h2>
+<p class="muted small">This is what the list was when frozen — kept pristine so a built unit can be reproduced exactly.</p>
+{{template "gathertable" .Frozen}}
+{{end}}
+{{template "foot" .}}{{end}}
+
+
+{{define "gathertable"}}
+{{range .Groups}}
+<table>
+<tr><th>{{.AssemblyName}}</th><th class="num">Qty</th></tr>
+{{range .Lines}}<tr><td>{{.Name}}</td><td class="num">{{trimNum .Qty}}</td></tr>{{end}}
+</table>
+{{end}}
+{{end}}
+
+
+{{define "ibom_import.html"}}{{template "head" .}}
+<h1>Import iBOM</h1>
+<p class="muted">Upload a KiCad InteractiveHtmlBom file. Its embedded data (refdes, value,
+footprint) is decoded directly — no browser needed — and the board becomes an assembly of
+its components.</p>
+<form method="post" action="/ibom/import" enctype="multipart/form-data">
+  <div class="row"><label>iBOM file</label><input type="file" name="ibom" accept=".html" required></div>
+  <div class="row"><label>Assembly name</label><input name="assembly_name" placeholder="PCB (defaults to the board title)" style="width:26rem"></div>
+  <p><button>Import</button></p>
+</form>
+{{template "foot" .}}{{end}}

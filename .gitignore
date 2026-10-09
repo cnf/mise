@@ -1,0 +1,23 @@
+# secrets — never commit
+partdb_apikey
+*.key
+.env
+
+# build artifacts
+/mise
+/bin/
+*.db
+*.db-shm
+*.db-wal
+
+# devenv state (thousands of files)
+/.devenv/
+
+# generated: KiCad InteractiveHtmlBom output; TestIBOMDecode skips without it
+ibom.html
+
+# runtime
+server.log
+
+# transient commit-message files
+.commitmsg

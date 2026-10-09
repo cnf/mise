@@ -1,0 +1,52 @@
+{{define "head"}}<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mise</title>
+<style>
+:root{--bg:#15171c;--fg:#e6e8ee;--dim:#9aa3b2;--line:#2a2f3a;--acc:#6ea8fe;--warn:#e0a33e;--err:#e06c75;--ok:#7ec699}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{display:flex;gap:1.2rem;align-items:center;padding:.7rem 1.1rem;border-bottom:1px solid var(--line)}
+header a{color:var(--fg);text-decoration:none}
+header a.brand{font-weight:700;letter-spacing:.06em;color:var(--acc)}
+main{padding:1.1rem;max-width:1150px;margin:0 auto}
+h1{font-size:1.25rem;margin:.2rem 0 1rem}
+h2{font-size:1rem;margin:1.4rem 0 .5rem;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+table{border-collapse:collapse;width:100%;margin:.4rem 0 1rem}
+th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+input,select,textarea{background:#1b1e25;color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:.35rem .5rem;font:inherit}
+textarea{width:100%;min-height:4rem}
+button{background:var(--acc);color:#0d1017;border:0;border-radius:4px;padding:.4rem .8rem;font:inherit;font-weight:600;cursor:pointer}
+button.ghost{background:#232833;color:var(--fg);font-weight:500}
+button.danger{background:transparent;color:var(--err);border:1px solid var(--err)}
+form.inline{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0 1rem}
+.row{display:grid;grid-template-columns:8rem 1fr;gap:.5rem 1rem;align-items:center;margin:.4rem 0}
+.muted{color:var(--dim)}
+.small{font-size:.85rem}
+.tag{display:inline-block;background:#232833;border-radius:3px;padding:.05rem .4rem;font-size:.78rem;color:var(--dim)}
+.warn{color:var(--warn)}
+.err{color:var(--err)}
+.ok{color:var(--ok)}
+.dnp{opacity:.45;text-decoration:line-through}
+.cards{display:flex;gap:1rem;flex-wrap:wrap}
+.card{border:1px solid var(--line);border-radius:6px;padding:.8rem 1rem;min-width:9rem}
+.card b{display:block;font-size:1.5rem}
+td form{margin:0;display:flex;gap:.3rem;align-items:center}
+</style>
+</head><body>
+<header>
+<a class="brand" href="/">MISE</a>
+<a href="/parts">Parts</a>
+<a href="/assemblies">Assemblies</a>
+<a href="/builds">Builds</a>
+<a href="/ibom/import">Import iBOM</a>
+<span style="flex:1"></span>
+<form method="post" action="/partdb/sync" style="margin:0"><button class="ghost">Sync Part-DB</button></form>
+</header>
+<main>
+{{end}}
+
+{{define "foot"}}</main></body></html>{{end}}

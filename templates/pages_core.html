@@ -1,0 +1,140 @@
+{{define "home.html"}}{{template "head" .}}
+<h1>mise</h1>
+<p class="muted">Lay out what you need, then build it.</p>
+<div class="cards">
+  <div class="card"><b>{{.PartCount}}</b><span class="muted">parts</span></div>
+  <div class="card"><b>{{.AsmCount}}</b><span class="muted">assemblies</span></div>
+  <div class="card"><b>{{.BuildCount}}</b><span class="muted">builds</span></div>
+</div>
+
+<h2>Assemblies</h2>
+{{if .Assemblies}}
+<table>
+<tr><th>Name</th><th>Description</th><th></th></tr>
+{{range .Assemblies}}
+<tr>
+  <td><a href="/assemblies/{{.ID}}">{{.Name}}</a></td>
+  <td class="muted small">{{.Description}}</td>
+  <td class="num"><a class="small" href="/gather/{{.ID}}">gather list</a></td>
+</tr>
+{{end}}
+</table>
+{{else}}<p class="muted">None yet. <a href="/assemblies/new">Create one</a> or <a href="/ibom/import">import an iBOM</a>.</p>{{end}}
+
+<h2>Builds</h2>
+{{if .Builds}}
+<table>
+<tr><th>#</th><th>Name</th><th>Frozen</th></tr>
+{{range .Builds}}
+<tr><td><a href="/builds/{{.ID}}">{{.ID}}</a></td><td>{{if .Name}}{{.Name}}{{else}}<span class="muted">unnamed</span>{{end}}</td>
+<td>{{if .FrozenAt}}<span class="ok small">{{.FrozenAt}}</span>{{else}}<span class="muted small">live</span>{{end}}</td></tr>
+{{end}}
+</table>
+{{else}}<p class="muted">No builds yet.</p>{{end}}
+
+<h2>Recently added parts</h2>
+{{if .Parts}}
+<table>
+<tr><th>Name</th><th>Kind</th><th class="num">Unit price</th></tr>
+{{range $i, $p := .Parts}}{{if lt $i 10}}
+<tr><td><a href="/parts/{{$p.ID}}">{{$p.Name}}</a></td><td><span class="tag">{{$p.Kind}}</span></td>
+<td class="num">{{price $p.UnitPrice}} {{if $p.UnitPrice}}{{$p.Currency}}{{end}}</td></tr>
+{{end}}{{end}}
+</table>
+{{else}}<p class="muted">No parts yet.</p>{{end}}
+{{template "foot" .}}{{end}}
+
+
+{{define "parts.html"}}{{template "head" .}}
+<h1>Parts <span class="muted small">({{len .Parts}})</span></h1>
+{{if .Q}}<p class="small muted">search: “{{.Q}}”</p>{{end}}
+<form class="inline" method="get" action="/parts">
+  <input name="q" value="{{.Q}}" placeholder="search name / description / attrs" style="width:20rem">
+  <button>Search</button>
+  <a href="/parts"><button class="ghost" type="button">Clear</button></a>
+</form>
+<form class="inline" method="get" action="/parts/new"><button>New part</button></form>
+
+{{if .Parts}}
+<table>
+<tr><th>Name</th><th>Kind</th><th>Description</th><th class="num">Unit</th><th>Part-DB</th><th></th></tr>
+{{range .Parts}}
+<tr>
+  <td><a href="/parts/{{.ID}}">{{.Name}}</a></td>
+  <td><span class="tag">{{.Kind}}</span></td>
+  <td class="muted small">{{.Description}}</td>
+  <td class="num">{{price .UnitPrice}} {{if .UnitPrice}}{{.Currency}}{{end}}</td>
+  <td class="small">{{if .PartDBID}}<span class="tag">#{{.PartDBID}}</span>{{end}}</td>
+  <td class="num">
+    {{if .VendorURL}}<a class="small" href="{{.VendorURL}}" target="_blank" rel="noopener">vendor</a>{{end}}
+    <a class="small" href="/parts/{{.ID}}/edit">edit</a>
+  </td>
+</tr>
+{{end}}
+</table>
+{{else}}<p class="muted">No parts match.</p>{{end}}
+{{template "foot" .}}{{end}}
+
+
+{{define "part_edit.html"}}{{template "head" .}}
+<h1>{{if .Part.ID}}Edit part{{else}}New part{{end}}</h1>
+<form method="post" action="{{if .Part.ID}}/parts/{{.Part.ID}}/edit{{else}}/parts/new{{end}}">
+  <div class="row"><label>Name *</label><input name="name" value="{{.Part.Name}}" required style="width:28rem"></div>
+  <div class="row"><label>Kind</label>
+    <select name="kind">
+      {{$k := .Part.Kind}}
+      {{range .Kinds}}<option value="{{.}}" {{if eq . $k}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </div>
+  <div class="row"><label>Description</label><input name="description" value="{{.Part.Description}}" style="width:34rem"></div>
+  <div class="row"><label>Unit price</label><input name="unit_price" value="{{price .Part.UnitPrice}}" style="width:8rem">
+    <input name="currency" value="{{.Part.Currency}}" style="width:5rem"></div>
+  <div class="row"><label>Vendor URL</label><input name="vendor_url" value="{{.Part.VendorURL}}" style="width:34rem"></div>
+  <div class="row"><label>Datasheet URL</label><input name="datasheet_url" value="{{.Part.DatasheetURL}}" style="width:34rem"></div>
+  <div class="row"><label>Part-DB id</label>
+    <div><input name="partdb_id" id="pdbid" value="{{if .Part.PartDBID}}{{.Part.PartDBID}}{{end}}" style="width:7rem">
+    <input id="pdbq" placeholder="search cached Part-DB…" style="width:16rem">
+    <span id="pdbhits" class="small"></span></div></div>
+  <div class="row"><label>Attrs (JSON)</label><input name="attrs" value="{{.Part.Attrs}}" style="width:34rem"></div>
+  <div class="row"><label>Notes</label><textarea name="notes">{{.Part.Notes}}</textarea></div>
+  <p><button>Save</button> <a href="/parts"><button class="ghost" type="button">Cancel</button></a></p>
+</form>
+{{if .Part.ID}}
+<form method="post" action="/parts/{{.Part.ID}}" onsubmit="return confirm('Delete this part?')">
+  <input type="hidden" name="_action" value="delete">
+  <button class="danger">Delete part</button>
+</form>
+{{end}}
+<script>
+const q=document.getElementById('pdbq'),hits=document.getElementById('pdbhits'),idf=document.getElementById('pdbid');
+let t;q.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(async()=>{
+  const r=await fetch('/api/partdb/search?q='+encodeURIComponent(q.value));
+  const j=await r.json();
+  hits.innerHTML='';
+  (j||[]).forEach(x=>{
+    const a=document.createElement('a');a.href='#';a.textContent=x.name+(x.mpn?' — '+x.mpn:'');
+    a.style.marginRight='.8rem';a.style.display='inline-block';
+    a.onclick=(e)=>{e.preventDefault();idf.value=x.partdb_id;
+      document.querySelector('input[name=name]').value=document.querySelector('input[name=name]').value||x.name;
+      document.querySelector('input[name=datasheet_url]').value=x.datasheet_url||'';
+      document.querySelector('input[name=description]').value=x.description||'';};
+    hits.appendChild(a);
+  });
+  if(!(j||[]).length)hits.textContent='no cached matches (press Sync Part-DB if the cache is empty)';
+},180)});
+</script>
+{{template "foot" .}}{{end}}
+
+
+{{define "part_view.html"}}{{template "head" .}}
+<h1>{{.Part.Name}}</h1>
+<p><span class="tag">{{.Part.Kind}}</span>
+{{if .Part.UnitPrice}}<span class="muted">· {{price .Part.UnitPrice}} {{.Part.Currency}}</span>{{end}}
+{{if .Part.PartDBID}}<span class="tag">Part-DB #{{.Part.PartDBID}}</span>{{end}}</p>
+{{if .Part.Description}}<p>{{.Part.Description}}</p>{{end}}
+{{if .Part.VendorURL}}<p><a href="{{.Part.VendorURL}}" target="_blank" rel="noopener">vendor page</a></p>{{end}}
+{{if .Part.DatasheetURL}}<p><a href="{{.Part.DatasheetURL}}" target="_blank" rel="noopener">datasheet</a></p>{{end}}
+{{if .Part.Attrs}}{{if ne .Part.Attrs "{}"}}<h2>Attrs</h2><pre class="small muted">{{.Part.Attrs}}</pre>{{end}}{{end}}
+{{if .Part.Notes}}<h2>Notes</h2><p>{{.Part.Notes}}</p>{{end}}
+<p><a href="/parts/{{.Part.ID}}/edit"><button>Edit</button></a> <a href="/parts"><button class="ghost" type="button">Back</button></a></p>
+{{template "foot" .}}{{end}}
