@@ -5,47 +5,87 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>mise</title>
 <style>
-:root{--bg:#15171c;--fg:#e6e8ee;--dim:#9aa3b2;--line:#2a2f3a;--acc:#6ea8fe;--warn:#e0a33e;--err:#e06c75;--ok:#7ec699}
+/* ---- tokens ---------------------------------------------------------------
+   The single source of truth for colour, space, radius and type. Nothing below
+   should contain a raw hex or a bare rem value for these; change the value here
+   and the whole app follows. Rendered values are documented in DESIGN.md. */
+:root{
+  /* surfaces, darkest first */
+  --bg:#15171c;
+  --surface:#1b1e25;      /* inputs, wells */
+  --surface-2:#232833;    /* raised chips: tags, step numbers, ghost buttons */
+  --paper:#ffffff;        /* light surface for embedded documents */
+  --line:#2a2f3a;         /* borders, dividers */
+  /* text, brightest first */
+  --fg:#e6e8ee;
+  --dim:#9aa3b2;          /* secondary text: still 7.05:1 on --bg */
+  --faint:#6b7484;        /* placeholders and de-emphasised meta only */
+  --on-acc:#0d1017;       /* text on an accent background */
+  /* semantic */
+  --acc:#6ea8fe;          /* primary action and link; 7.42:1 on --bg */
+  --acc-hover:#8bbcff;
+  --acc-visited:#8aa9d6;  /* visited, kept legible (default purple was 1.63:1) */
+  --ok:#7ec699;
+  --warn:#e0a33e;
+  --err:#e06c75;
+  /* space */
+  --s1:.25rem; --s2:.5rem; --s3:.75rem; --s4:1rem; --s5:1.5rem;
+  /* radius */
+  --r1:4px; --r2:6px;
+  /* type */
+  --fs-xs:.78rem; --fs-sm:.85rem; --fs:14px; --fs-lg:1.05rem;
+  --fs-h2:1rem; --fs-h1:1.35rem;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+body{margin:0;background:var(--bg);color:var(--fg);font:var(--fs)/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+/* Links are the primary affordance and appear in almost every table cell, so
+   their colour is set here rather than left to the browser default (which was
+   #0000EE unvisited / #551A8B visited — 1.9:1 and 1.6:1 on this background). */
+a{color:var(--acc);text-decoration:none}
+a:hover{color:var(--acc-hover);text-decoration:underline}
+a:visited{color:var(--acc-visited)}
+::placeholder{color:var(--faint)}
+::selection{background:var(--acc);color:var(--on-acc)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 header{display:flex;gap:1.2rem;align-items:center;padding:.7rem 1.1rem;border-bottom:1px solid var(--line)}
 header a{color:var(--fg);text-decoration:none}
+header a:hover{color:var(--acc)}
 header a.brand{font-weight:700;letter-spacing:.06em;color:var(--acc)}
 main{padding:1.1rem;max-width:1150px;margin:0 auto}
-h1{font-size:1.25rem;margin:.2rem 0 1rem}
-h2{font-size:1rem;margin:1.4rem 0 .5rem;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+h1{font-size:var(--fs-h1);margin:.2rem 0 1rem}
+h2{font-size:var(--fs-h2);margin:1.4rem 0 .5rem;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
 table{border-collapse:collapse;width:100%;margin:.4rem 0 1rem}
 th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
 th{color:var(--dim);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-input,select,textarea{background:#1b1e25;color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:.35rem .5rem;font:inherit}
+input,select,textarea{background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:var(--r1);padding:.35rem .5rem;font:inherit}
 textarea{width:100%;min-height:4rem}
-button{background:var(--acc);color:#0d1017;border:0;border-radius:4px;padding:.4rem .8rem;font:inherit;font-weight:600;cursor:pointer}
-button.ghost{background:#232833;color:var(--fg);font-weight:500}
+button{background:var(--acc);color:var(--on-acc);border:0;border-radius:var(--r1);padding:.4rem .8rem;font:inherit;font-weight:600;cursor:pointer}
+button.ghost{background:var(--surface-2);color:var(--fg);font-weight:500}
 button.danger{background:transparent;color:var(--err);border:1px solid var(--err)}
 form.inline{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0 1rem}
 .row{display:grid;grid-template-columns:8rem 1fr;gap:.5rem 1rem;align-items:center;margin:.4rem 0}
 .muted{color:var(--dim)}
-.small{font-size:.85rem}
-.tag{display:inline-block;background:#232833;border-radius:3px;padding:.05rem .4rem;font-size:.78rem;color:var(--dim)}
+.small{font-size:var(--fs-sm)}
+.tag{display:inline-block;background:var(--surface-2);border-radius:3px;padding:.05rem .4rem;font-size:var(--fs-xs);color:var(--dim)}
 .warn{color:var(--warn)}
 .err{color:var(--err)}
 .ok{color:var(--ok)}
 .dnp{opacity:.45;text-decoration:line-through}
 .cards{display:flex;gap:1rem;flex-wrap:wrap}
-.card{border:1px solid var(--line);border-radius:6px;padding:.8rem 1rem;min-width:9rem}
+.card{border:1px solid var(--line);border-radius:var(--r2);padding:.8rem 1rem;min-width:9rem}
 .card b{display:block;font-size:1.5rem}
 td form{margin:0;display:flex;gap:.3rem;align-items:center}
-.step{display:grid;grid-template-columns:2.2rem 1fr;gap:.6rem;border:1px solid var(--line);border-radius:6px;padding:.7rem .8rem;margin:.5rem 0}
-.stepnum{background:#232833;color:var(--acc);border-radius:50%;width:1.8rem;height:1.8rem;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem}
+.step{display:grid;grid-template-columns:2.2rem 1fr;gap:.6rem;border:1px solid var(--line);border-radius:var(--r2);padding:.7rem .8rem;margin:.5rem 0}
+.stepnum{background:var(--surface-2);color:var(--acc);border-radius:50%;width:1.8rem;height:1.8rem;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--fs-sm)}
 .steptitle{font-weight:600;margin-bottom:.25rem}
 .steptext{white-space:pre-wrap;margin-bottom:.4rem}
-.step img{max-width:100%;max-height:22rem;border-radius:4px;display:block;margin:.3rem 0}
+.step img{max-width:100%;max-height:22rem;border-radius:var(--r1);display:block;margin:.3rem 0}
 .step figure{margin:.4rem 0}
 .step form.inline.small{margin:.15rem 0}
 .submanual{border-left:2px solid var(--acc);padding-left:.7rem;margin:.5rem 0;opacity:.95}
-.ibom{width:100%;height:34rem;border:1px solid var(--line);border-radius:4px;background:#fff;margin:.4rem 0}
-model-viewer.model{width:100%;height:30rem;border:1px solid var(--line);border-radius:4px;margin:.4rem 0;display:block}
+.ibom{width:100%;height:34rem;border:1px solid var(--line);border-radius:var(--r1);background:var(--paper);margin:.4rem 0}
+model-viewer.model{width:100%;height:30rem;border:1px solid var(--line);border-radius:var(--r1);margin:.4rem 0;display:block;background:var(--bg)}
 .docbar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:.3rem 0}
 .docbar form{margin:0}
 button.small{padding:.15rem .5rem;font-size:.82rem}
