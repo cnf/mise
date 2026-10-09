@@ -162,6 +162,21 @@ form.inline{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5re
 details.card>summary{cursor:pointer;list-style:none}
 details.card>summary::-webkit-details-marker{display:none}
 details.card[open]>summary .r{visibility:hidden}
+/* ---- Part-DB picker on the part form --------------------------------- */
+.pdb{display:flex;flex-direction:column;gap:.5rem;min-width:0}
+.pdbtop{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+.pdbtop #pdbq{flex:1;min-width:16rem}
+.hits{background:var(--bg);border:1px solid var(--line);border-radius:var(--r1);
+  max-height:18rem;overflow:auto}
+.hit{display:grid;grid-template-columns:1fr auto;gap:.1rem .8rem;width:100%;text-align:left;
+  background:none;border:0;border-bottom:1px solid var(--line);border-radius:0;
+  padding:.55rem .8rem;color:var(--fg);font:inherit;cursor:pointer}
+.hit:last-child{border-bottom:0}
+.hit:hover,.hit:focus{background:var(--surface-2)}
+.hit .hn{font-weight:600}
+.hit .hm{color:var(--faint);font-size:var(--fs-xs);font-family:ui-monospace,Menlo,monospace;align-self:center}
+.hit .hd{grid-column:1/-1;color:var(--dim);font-size:var(--fs-sm)}
+.hit.none{color:var(--dim);cursor:default}
 /* ---- the two verbs: gather / build, stated open ---------------------- */
 .verbs{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:0 0 1.5rem}
 .verb{display:block;background:var(--surface);border:1px solid var(--line);

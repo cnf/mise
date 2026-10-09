@@ -89,6 +89,17 @@ func partDBConfig() (base, key string, err error) {
 	return strings.TrimRight(base, "/"), key, nil
 }
 
+// WebURL is the human-facing page for a Part-DB part, derived from the API base
+// (".../api" -> ".../en/part/{id}/info"). It reads only the base URL, never the key.
+func WebURL(id int64) string {
+	base := os.Getenv("PARTDB_BASE_URL")
+	if base == "" {
+		base = "https://parts.home.nullsense.net/api"
+	}
+	base = strings.TrimSuffix(strings.TrimRight(base, "/"), "/api")
+	return fmt.Sprintf("%s/en/part/%d/info", base, id)
+}
+
 // SyncPartDB fetches every part from Part-DB and replaces the local cache.
 func SyncPartDB(db *sql.DB) (int, error) {
 	base, key, err := partDBConfig()

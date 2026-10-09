@@ -6,6 +6,8 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+
+	"example.com/cnf/mise/internal/partdb"
 )
 
 //go:embed templates/*.html
@@ -25,16 +27,28 @@ type Server struct {
 // template helper is registered here and nowhere else, so the tests that parse
 // the same files exercise the same FuncMap the running server does.
 func New(db *sql.DB) (*Server, error) {
-	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"trimNum": TrimNum,
-		"price":   func(p *float64) string { return StrFmt(p) },
-		"mul":     func(p *float64, q float64) string { return MulFmt(p, q) },
-		"inc":     func(i int) int { return i + 1 },
-	}).ParseFS(templateFiles, "templates/*.html")
+	tmpl, err := template.New("").Funcs(funcMap()).ParseFS(templateFiles, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
 	return &Server{db: db, tmpl: tmpl}, nil
+}
+
+// funcMap is the one template FuncMap; tests parse with it too.
+func funcMap() template.FuncMap {
+	return template.FuncMap{
+		"trimNum":   TrimNum,
+		"price":     func(p *float64) string { return StrFmt(p) },
+		"mul":       func(p *float64, q float64) string { return MulFmt(p, q) },
+		"inc":       func(i int) int { return i + 1 },
+		"partdbTpl": func() string { return partdb.WebURL(0) },
+		"partdbURL": func(id *int64) string {
+			if id == nil {
+				return ""
+			}
+			return partdb.WebURL(*id)
+		},
+	}
 }
 
 // Handler returns the router with every route wired to its method.

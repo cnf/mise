@@ -16,12 +16,7 @@ import (
 // all in others) this is where it must fail, not at process start.
 func parseTemplates(t *testing.T) *template.Template {
 	t.Helper()
-	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"trimNum": TrimNum,
-		"price":   func(p *float64) string { return StrFmt(p) },
-		"mul":     func(p *float64, q float64) string { return MulFmt(p, q) },
-		"inc":     func(i int) int { return i + 1 },
-	}).ParseFS(templateFiles, "templates/*.html")
+	tmpl, err := template.New("").Funcs(funcMap()).ParseFS(templateFiles, "templates/*.html")
 	if err != nil {
 		t.Fatalf("template parse: %v", err)
 	}

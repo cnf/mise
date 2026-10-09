@@ -76,7 +76,7 @@
   <td><span class="tag">{{.Kind}}</span></td>
   <td class="muted small">{{.Description}}</td>
   <td class="num">{{price .UnitPrice}} {{if .UnitPrice}}{{.Currency}}{{end}}</td>
-  <td class="small">{{if .PartDBID}}<span class="tag">#{{.PartDBID}}</span>{{end}}</td>
+  <td class="small">{{if .PartDBID}}<a class="tag" href="{{partdbURL .PartDBID}}" target="_blank" rel="noopener">#{{.PartDBID}} ↗</a>{{end}}</td>
   <td class="num">
     {{if .VendorURL}}<a class="small" href="{{.VendorURL}}" target="_blank" rel="noopener">vendor</a>{{end}}
     <a class="small" href="/parts/{{.ID}}/edit">edit</a>
@@ -105,10 +105,16 @@
     <input name="currency" value="{{.Part.Currency}}" style="width:5rem"></div>
   <div class="row"><label>Vendor URL</label><input name="vendor_url" value="{{.Part.VendorURL}}" style="width:34rem"></div>
   <div class="row"><label>Datasheet URL</label><input name="datasheet_url" value="{{.Part.DatasheetURL}}" style="width:34rem"></div>
-  <div class="row"><label>Part-DB id</label>
-    <div><input name="partdb_id" id="pdbid" value="{{if .Part.PartDBID}}{{.Part.PartDBID}}{{end}}" style="width:7rem">
-    <input id="pdbq" placeholder="search cached Part-DB…" style="width:16rem">
-    <span id="pdbhits" class="small"></span></div></div>
+  <div class="row"><label>Part-DB</label>
+    <div class="pdb">
+      <div class="pdbtop">
+        <input name="partdb_id" id="pdbid" value="{{if .Part.PartDBID}}{{.Part.PartDBID}}{{end}}" style="width:6rem" placeholder="id" aria-label="Part-DB id">
+        <input id="pdbq" placeholder="search the Part-DB cache by name, MPN or description…" aria-label="search Part-DB" autocomplete="off">
+        <a id="pdblink" class="small" data-tpl="{{partdbTpl}}" target="_blank" rel="noopener" {{if .Part.PartDBID}}href="{{partdbURL .Part.PartDBID}}"{{else}}hidden{{end}}>open in Part-DB ↗</a>
+      </div>
+      <div id="pdbhits" class="hits" hidden></div>
+      <div id="pdbmsg" class="small muted">Picking a result links the part and fills only the fields that are still empty.</div>
+    </div></div>
   <div class="row"><label>Attrs (JSON)</label><input name="attrs" value="{{.Part.Attrs}}" style="width:34rem"></div>
   <div class="row"><label>Notes</label><textarea name="notes">{{.Part.Notes}}</textarea></div>
   <p><button>Save</button> <a href="/parts"><button class="ghost" type="button">Cancel</button></a></p>
@@ -120,22 +126,42 @@
 </form>
 {{end}}
 <script>
-const q=document.getElementById('pdbq'),hits=document.getElementById('pdbhits'),idf=document.getElementById('pdbid');
+(()=>{
+const q=document.getElementById('pdbq'),hits=document.getElementById('pdbhits'),
+  idf=document.getElementById('pdbid'),msg=document.getElementById('pdbmsg'),lnk=document.getElementById('pdblink');
+const f=n=>document.querySelector('[name='+n+']');
+const fillEmpty=(n,v)=>{const e=f(n);if(e&&v&&!e.value.trim()){e.value=v;return true}return false};
+const pick=x=>{
+  idf.value=x.partdb_id;
+  const did=[];
+  if(fillEmpty('name',x.name))did.push('name');
+  if(fillEmpty('description',x.description))did.push('description');
+  if(fillEmpty('datasheet_url',x.datasheet_url))did.push('datasheet');
+  const a=f('attrs');let o={};try{o=JSON.parse(a.value||'{}')||{}}catch(e){o=null}
+  if(o){let ch=false;
+    if(x.mpn&&!o.mpn){o.mpn=x.mpn;ch=true}
+    if(x.manufacturer&&!o.manufacturer){o.manufacturer=x.manufacturer;ch=true}
+    if(ch){a.value=JSON.stringify(o);did.push('MPN/manufacturer')}}
+  lnk.href=lnk.dataset.tpl.replace('/part/0/','/part/'+x.partdb_id+'/');lnk.hidden=false;
+  hits.hidden=true;q.value='';
+  msg.textContent='Linked Part-DB #'+x.partdb_id+(did.length?' — filled '+did.join(', ')+'.':' — nothing to fill, all fields already set.')+' Save to keep it.';
+};
 let t;q.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(async()=>{
-  const r=await fetch('/api/partdb/search?q='+encodeURIComponent(q.value));
-  const j=await r.json();
-  hits.innerHTML='';
-  (j||[]).forEach(x=>{
-    const a=document.createElement('a');a.href='#';a.textContent=x.name+(x.mpn?' — '+x.mpn:'');
-    a.style.marginRight='.8rem';a.style.display='inline-block';
-    a.onclick=(e)=>{e.preventDefault();idf.value=x.partdb_id;
-      document.querySelector('input[name=name]').value=document.querySelector('input[name=name]').value||x.name;
-      document.querySelector('input[name=datasheet_url]').value=x.datasheet_url||'';
-      document.querySelector('input[name=description]').value=x.description||'';};
-    hits.appendChild(a);
+  if(!q.value.trim()){hits.hidden=true;return}
+  const j=await (await fetch('/api/partdb/search?q='+encodeURIComponent(q.value))).json();
+  hits.innerHTML='';hits.hidden=false;
+  if(!(j||[]).length){hits.innerHTML='<div class="hit none">No cached matches — use “Sync Part-DB” in the top bar if the cache is empty.</div>';return}
+  j.forEach(x=>{
+    const b=document.createElement('button');b.type='button';b.className='hit';
+    const n=document.createElement('span');n.className='hn';n.textContent=x.name;
+    const m=document.createElement('span');m.className='hm';
+    m.textContent=[x.manufacturer,x.mpn&&x.mpn!==x.name?x.mpn:'','#'+x.partdb_id].filter(Boolean).join(' · ');
+    b.append(n,m);
+    if(x.description){const d=document.createElement('span');d.className='hd';d.textContent=x.description;b.append(d)}
+    b.onclick=()=>pick(x);hits.appendChild(b);
   });
-  if(!(j||[]).length)hits.textContent='no cached matches (press Sync Part-DB if the cache is empty)';
 },180)});
+})();
 </script>
 {{template "foot" .}}{{end}}
 
@@ -145,7 +171,7 @@ let t;q.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(async()=>{
 <h1>{{.Part.Name}}</h1>
 <p><span class="tag">{{.Part.Kind}}</span>
 {{if .Part.UnitPrice}}<span class="muted">· {{price .Part.UnitPrice}} {{.Part.Currency}}</span>{{end}}
-{{if .Part.PartDBID}}<span class="tag">Part-DB #{{.Part.PartDBID}}</span>{{end}}</p>
+{{if .Part.PartDBID}}<a class="tag" href="{{partdbURL .Part.PartDBID}}" target="_blank" rel="noopener">Part-DB #{{.Part.PartDBID}} ↗</a>{{end}}</p>
 {{if .Part.Description}}<p class="lede">{{.Part.Description}}</p>{{end}}
 <div class="card panel">
   <div class="hd2"><h2>Details</h2><span class="r"><a href="/parts/{{.Part.ID}}/edit">Edit part</a></span></div>
