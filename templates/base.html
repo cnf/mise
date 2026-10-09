@@ -7,105 +7,212 @@
 <style>
 /* ---- tokens ---------------------------------------------------------------
    The single source of truth for colour, space, radius and type. Nothing below
-   should contain a raw hex or a bare rem value for these; change the value here
-   and the whole app follows. Rendered values are documented in DESIGN.md. */
+   may contain a raw hex or a bare length for these; change the value here and
+   the whole app follows. The enforced pairings are checked by ui_test.go
+   (TestTokenContrast / TestNoRawHexOutsideTokens).
+
+   The register is "workbench": warm dark surfaces, one amber accent, rounded
+   cards. Dark by intent — this is a tool you look at with the lights on in a
+   shed, not a document. Rendered values are documented in DESIGN.md. */
 :root{
   /* surfaces, darkest first */
-  --bg:#15171c;
-  --surface:#1b1e25;      /* inputs, wells */
-  --surface-2:#232833;    /* raised chips: tags, step numbers, ghost buttons */
+  --bg:#1a1714;
+  --surface:#241f1a;      /* cards, inputs, wells */
+  --surface-2:#2e2822;    /* raised chips: tags, step numbers, quiet buttons */
   --paper:#ffffff;        /* light surface for embedded documents */
-  --line:#2a2f3a;         /* borders, dividers */
+  --line:#3a322a;         /* borders, dividers */
+  --line-strong:#4a4036;  /* emphasised borders */
   /* text, brightest first */
-  --fg:#e6e8ee;
-  --dim:#9aa3b2;          /* secondary text: still 7.05:1 on --bg */
-  --faint:#6b7484;        /* placeholders and de-emphasised meta only */
-  --on-acc:#0d1017;       /* text on an accent background */
+  --fg:#f2ece4;
+  --dim:#c2b4a2;          /* secondary text: 8.79:1 on --bg */
+  --faint:#9a8c78;      /* placeholders and de-emphasised meta: 5.44:1 on --bg,
+                           and still 4.43:1 on --surface-2 (the old #847766 was
+                           4.09:1 — below AA, and used for table headers) */
+  --on-acc:#231603;       /* text on an accent background */
   /* semantic */
-  --acc:#6ea8fe;          /* primary action and link; 7.42:1 on --bg */
-  --acc-hover:#8bbcff;
-  --acc-visited:#8aa9d6;  /* visited, kept legible (default purple was 1.63:1) */
-  --ok:#7ec699;
-  --warn:#e0a33e;
-  --err:#e06c75;
+  --acc:#f0a541;          /* primary action, links, active nav; 8.64:1 on --bg */
+  --acc-hover:#ffc06a;
+  --acc-visited:#cba76a;  /* visited, kept legible */
+  --ok:#8fce7d;
+  --warn:#e8a13a;
+  --err:#e5776b;
   /* space */
   --s1:.25rem; --s2:.5rem; --s3:.75rem; --s4:1rem; --s5:1.5rem;
   /* radius */
-  --r1:4px; --r2:6px;
+  --r1:9px; --r2:14px;
   /* type */
-  --fs-xs:.78rem; --fs-sm:.85rem; --fs:14px; --fs-lg:1.05rem;
-  --fs-h2:1rem; --fs-h1:1.35rem;
+  --fs-xs:.72rem; --fs-sm:.82rem; --fs:15px; --fs-lg:1.05rem;
+  --fs-h2:1rem; --fs-h1:1.7rem;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:var(--fs)/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:var(--fs)/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased}
 /* Links are the primary affordance and appear in almost every table cell, so
    their colour is set here rather than left to the browser default (which was
-   #0000EE unvisited / #551A8B visited — 1.9:1 and 1.6:1 on this background). */
+   #0000EE unvisited / #551A8B visited — both unreadable on this background). */
 a{color:var(--acc);text-decoration:none}
 a:hover{color:var(--acc-hover);text-decoration:underline}
 a:visited{color:var(--acc-visited)}
 ::placeholder{color:var(--faint)}
 ::selection{background:var(--acc);color:var(--on-acc)}
 :focus-visible{outline:2px solid var(--acc);outline-offset:1px}
-header{display:flex;gap:1.2rem;align-items:center;padding:.7rem 1.1rem;border-bottom:1px solid var(--line)}
-header a{color:var(--fg);text-decoration:none}
-header a:hover{color:var(--acc)}
-header a.brand{font-weight:700;letter-spacing:.06em;color:var(--acc)}
-main{padding:1.1rem;max-width:1150px;margin:0 auto}
-h1{font-size:var(--fs-h1);margin:.2rem 0 1rem}
-h2{font-size:var(--fs-h2);margin:1.4rem 0 .5rem;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
-table{border-collapse:collapse;width:100%;margin:.4rem 0 1rem}
-th,td{text-align:left;padding:.4rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--dim);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}
+/* ---- chrome: a warm tool bar. Nav items carry the live counts so the bar
+   is an instrument, not just navigation. -------------------------------- */
+header{display:flex;align-items:center;gap:1.4rem;padding:.65rem 1.3rem;
+  background:var(--surface);border-bottom:1px solid var(--line);position:sticky;
+  top:0;z-index:5}
+header .brand{font-weight:800;letter-spacing:.02em;font-size:1.05rem;color:var(--fg)}
+header .brand span{color:var(--acc)}
+header nav{display:flex;align-items:center;gap:.25rem}
+header nav a{display:flex;align-items:center;gap:.45rem;color:var(--dim);
+  padding:.42rem .8rem;border-radius:var(--r1);font-size:.9rem;font-weight:500;
+  white-space:nowrap}
+header nav a b{font-size:.68rem;font-weight:700;color:var(--dim);
+  background:var(--surface-2);border-radius:99px;padding:.05rem .4rem}
+header nav a:hover{background:var(--surface-2);color:var(--fg);text-decoration:none}
+header nav a.on{background:var(--surface-2);color:var(--fg)}
+header nav a.on b{color:var(--on-acc);background:var(--acc)}
+header .sp{flex:1}
+header .sync{font-size:.78rem;color:var(--faint)}
+header .sync b{color:var(--ok)}
+header form{margin:0}
+main{padding:1.4rem;max-width:1150px;margin:0 auto}
+h1{font-size:var(--fs-h1);margin:.1rem 0 .5rem;font-weight:700;letter-spacing:-.01em}
+h2{font-size:var(--fs-h2);margin:1.6rem 0 .6rem;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.06em}
+/* ---- tables: hairline, no vertical rules ----------------------------- */
+table{border-collapse:collapse;width:100%;margin:.4rem 0 1.2rem}
+th,td{text-align:left;padding:.5rem .7rem;border-bottom:1px solid var(--line);
+  vertical-align:top}
+th{color:var(--faint);font-weight:600;font-size:.72rem;text-transform:uppercase;
+  letter-spacing:.07em;border-bottom-color:var(--line-strong)}
+tbody tr:hover td{background:var(--surface)}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-input,select,textarea{background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:var(--r1);padding:.35rem .5rem;font:inherit}
+/* ---- form controls --------------------------------------------------- */
+input,select,textarea{background:var(--surface);color:var(--fg);
+  border:1px solid var(--line);border-radius:var(--r1);padding:.45rem .6rem;font:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--line-strong)}
 textarea{width:100%;min-height:4rem}
-button{background:var(--acc);color:var(--on-acc);border:0;border-radius:var(--r1);padding:.4rem .8rem;font:inherit;font-weight:600;cursor:pointer}
-button.ghost{background:var(--surface-2);color:var(--fg);font-weight:500}
+button{background:var(--acc);color:var(--on-acc);border:0;border-radius:var(--r1);
+  padding:.5rem .9rem;font:inherit;font-weight:650;cursor:pointer}
+button:hover{background:var(--acc-hover)}
+button.ghost{background:var(--surface-2);color:var(--fg);font-weight:550}
+button.ghost:hover{background:var(--line)}
 button.danger{background:transparent;color:var(--err);border:1px solid var(--err)}
-form.inline{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0 1rem}
-.row{display:grid;grid-template-columns:8rem 1fr;gap:.5rem 1rem;align-items:center;margin:.4rem 0}
+button.danger:hover{background:var(--err);color:var(--on-acc)}
+button.small{padding:.2rem .55rem;font-size:.78rem}
+.btn{display:inline-block;background:var(--surface-2);color:var(--fg);
+  border:1px solid var(--line);border-radius:var(--r1);padding:.5rem .9rem;
+  font-size:.88rem;font-weight:600}
+.btn:hover{border-color:var(--acc);text-decoration:none;color:var(--fg)}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.btn.primary:hover{background:var(--acc-hover)}
+form.inline{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0 1.2rem}
+.row{display:grid;grid-template-columns:9rem 1fr;gap:.5rem 1rem;align-items:center;margin:.5rem 0}
+/* ---- text utilities -------------------------------------------------- */
 .muted{color:var(--dim)}
 .small{font-size:var(--fs-sm)}
-.tag{display:inline-block;background:var(--surface-2);border-radius:3px;padding:.05rem .4rem;font-size:var(--fs-xs);color:var(--dim)}
 .warn{color:var(--warn)}
 .err{color:var(--err)}
 .ok{color:var(--ok)}
-.dnp{opacity:.45;text-decoration:line-through}
+.dnp{opacity:.5}
+/* ---- chips / tags ---------------------------------------------------- */
+.tag{display:inline-block;background:var(--surface-2);border-radius:99px;
+  padding:.08rem .55rem;font-size:var(--fs-xs);color:var(--dim);
+  letter-spacing:.04em;text-transform:uppercase}
+.tag.mode-on{background:var(--acc);color:var(--on-acc);font-weight:700}
+.chip{display:inline-block;background:var(--surface-2);color:var(--dim);
+  border-radius:99px;padding:.1rem .55rem;font-size:var(--fs-xs);
+  letter-spacing:.05em;text-transform:uppercase}
+.chip.acc{background:rgba(240,165,65,.16);color:var(--acc)}
+/* ---- cards ----------------------------------------------------------- */
 .cards{display:flex;gap:1rem;flex-wrap:wrap}
-.card{border:1px solid var(--line);border-radius:var(--r2);padding:.8rem 1rem;min-width:9rem}
-.card b{display:block;font-size:1.5rem}
-td form{margin:0;display:flex;gap:.3rem;align-items:center}
-.step{display:grid;grid-template-columns:2.2rem 1fr;gap:.6rem;border:1px solid var(--line);border-radius:var(--r2);padding:.7rem .8rem;margin:.5rem 0}
-.stepnum{background:var(--surface-2);color:var(--acc);border-radius:50%;width:1.8rem;height:1.8rem;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:var(--fs-sm)}
-.steptitle{font-weight:600;margin-bottom:.25rem}
-.steptext{white-space:pre-wrap;margin-bottom:.4rem}
-.step img{max-width:100%;max-height:22rem;border-radius:var(--r1);display:block;margin:.3rem 0}
-.step figure{margin:.4rem 0}
-.step form.inline.small{margin:.15rem 0}
-.submanual{border-left:2px solid var(--acc);padding-left:.7rem;margin:.5rem 0;opacity:.95}
-.ibom{width:100%;height:34rem;border:1px solid var(--line);border-radius:var(--r1);background:var(--paper);margin:.4rem 0}
-model-viewer.model{width:100%;height:30rem;border:1px solid var(--line);border-radius:var(--r1);margin:.4rem 0;display:block;background:var(--bg)}
-.docbar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:.3rem 0}
-.docbar form{margin:0}
-/* A mode bar states which of the two modes a page is in. Before this, an
-   assembly view was 30 edit controls and nothing said so. */
-.modebar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;border:1px solid var(--line);border-radius:var(--r1);padding:.4rem .6rem;margin:0 0 .9rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r2);
+  padding:.9rem 1.1rem;min-width:9rem}
+.card b{display:block;font-size:1.55rem;font-family:ui-monospace,Menlo,monospace}
+/* ---- the two verbs: gather / build, stated open ---------------------- */
+.verbs{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:0 0 1.5rem}
+.verb{display:block;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r2);padding:1rem 1.15rem}
+.verb.primary{background:linear-gradient(135deg,var(--surface-2),var(--surface));
+  border-color:var(--line-strong)}
+.verb .vt{font-size:1.05rem;font-weight:700;margin-bottom:.2rem}
+.verb .vd{color:var(--dim);font-size:.88rem}
+.verb .go{margin-top:.6rem;font-size:.8rem;color:var(--acc);font-weight:600}
+.verb:hover{text-decoration:none;border-color:var(--acc)}
+.verb:hover .vt{color:var(--fg)}
+/* ---- the parts list: chunky rows, one per part ----------------------- */
+ul.plist{list-style:none;margin:0;padding:0}
+ul.plist li{display:grid;grid-template-columns:2.6rem 1fr auto;gap:1rem;
+  align-items:center;padding:.65rem .3rem;border-bottom:1px solid var(--line)}
+ul.plist li:last-child{border-bottom:0}
+ul.plist li:hover{background:var(--surface-2)}
+ul.plist .q{font-family:ui-monospace,Menlo,monospace;font-size:1.15rem;font-weight:700;
+  color:var(--acc);text-align:center;background:var(--bg);border-radius:var(--r1);padding:.3rem 0}
+ul.plist .q small{display:block;font-size:.5rem;letter-spacing:.1em;color:var(--faint);
+  font-weight:500}
+ul.plist .nm{font-weight:600}
+ul.plist .sub{font-size:var(--fs-sm);color:var(--dim)}
+ul.plist .sub .refs{font-family:ui-monospace,Menlo,monospace;color:var(--faint)}
+ul.plist .price{font-size:var(--fs-sm);color:var(--dim);text-align:right;
+  font-variant-numeric:tabular-nums}
+ul.plist li.dnp{opacity:.5}
+ul.plist li.dnp .nm{text-decoration:line-through}
+/* ---- variant slots: chooser cards ----------------------------------- */
+.slotcard{background:var(--bg);border:1px dashed var(--line-strong);
+  border-radius:var(--r2);padding:1rem 1.1rem;margin:.6rem 0}
+.slotcard .sh{font-weight:650;margin-bottom:.2rem}
+.slotcard .sd{color:var(--dim);font-size:var(--fs-sm);margin-bottom:.7rem}
+.slotcard .choices{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem}
+.slotcard .choice{display:block;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r1);padding:.6rem .8rem}
+.slotcard .choice.sel{border-color:var(--acc);background:var(--surface-2)}
+.slotcard .choice .cl{font-weight:600}
+.slotcard .choice .ct{font-size:.76rem;color:var(--dim);
+  font-family:ui-monospace,Menlo,monospace}
+.slotcard .choice .cd{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--acc)}
+/* ---- a mode bar states which of the two modes a page is in ---------- */
+.modebar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r1);
+  padding:.5rem .7rem;margin:0 0 1.1rem}
 .modebar form{margin:0}
-.tag.mode-on{background:var(--acc);color:var(--on-acc);font-weight:600}
-.stepbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.3rem 0}
+/* ---- manual steps ---------------------------------------------------- */
+.steps{display:flex;flex-direction:column;gap:.7rem}
+.step{display:grid;grid-template-columns:2.6rem 1fr;gap:.9rem;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r2);padding:.9rem 1rem}
+.stepnum{width:2.2rem;height:2.2rem;border-radius:50%;background:var(--acc);
+  color:var(--on-acc);display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:1rem}
+.steptitle{font-weight:650;font-size:1.02rem;margin-bottom:.2rem}
+.steptext{color:var(--dim);white-space:pre-wrap;margin-bottom:.4rem}
+.step img{max-width:100%;max-height:22rem;border-radius:var(--r1);display:block;margin:.4rem 0}
+.step figure{margin:.5rem 0}
+.step form.inline.small{margin:.3rem 0}
+.stepbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.5rem 0 0}
 .stepbar form{margin:0}
-button.small{padding:.15rem .5rem;font-size:.82rem}
+.submanual{border-left:2px solid var(--acc);padding-left:.8rem;margin:.6rem 0;
+  background:var(--bg);border-radius:0 var(--r1) var(--r1) 0}
+/* ---- embedded board / model ----------------------------------------- */
+.ibom{width:100%;height:34rem;border:1px solid var(--line);border-radius:var(--r1);
+  background:var(--paper);margin:.5rem 0}
+model-viewer.model{width:100%;height:30rem;border:1px solid var(--line);
+  border-radius:var(--r1);margin:.5rem 0;display:block;background:var(--bg)}
+.docbar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:.4rem 0}
+.docbar form{margin:0}
 </style>
 </head><body>
 <header>
-<a class="brand" href="/">MISE</a>
-<a href="/parts">Parts</a>
-<a href="/assemblies">Assemblies</a>
-<a href="/builds">Builds</a>
-<a href="/ibom/import">Import iBOM</a>
-<span style="flex:1"></span>
-<form method="post" action="/partdb/sync" style="margin:0"><button class="ghost">Sync Part-DB</button></form>
+<a class="brand" href="/">mise<span>.</span></a>
+<nav>
+  <a href="/parts"{{if eq .Active "/parts"}} class="on"{{end}}>Parts{{if .PartCount}}<b>{{.PartCount}}</b>{{end}}</a>
+  <a href="/assemblies"{{if eq .Active "/assemblies"}} class="on"{{end}}>Assemblies{{if .AsmCount}}<b>{{.AsmCount}}</b>{{end}}</a>
+  <a href="/builds"{{if eq .Active "/builds"}} class="on"{{end}}>Builds{{if .BuildCount}}<b>{{.BuildCount}}</b>{{end}}</a>
+  <a href="/ibom/import"{{if eq .Active "/ibom"}} class="on"{{end}}>Import iBOM</a>
+</nav>
+<span class="sp"></span>
+<form method="post" action="/partdb/sync"><button class="ghost small">Sync Part-DB</button></form>
 </header>
 <main>
 {{end}}

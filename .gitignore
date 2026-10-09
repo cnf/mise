@@ -21,3 +21,4 @@ server.log
 
 # transient commit-message files
 .commitmsg
+Scratch/

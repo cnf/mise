@@ -102,7 +102,7 @@ func mustHex(t *testing.T, s string) [3]float64 {
 // Thresholds are WCAG AA: 4.5:1 for body text, 3:1 for large text/UI.
 func TestTokenContrast(t *testing.T) {
 	tok := rootTokens(t)
-	for _, need := range []string{"--bg", "--fg", "--dim", "--acc", "--on-acc", "--acc-visited", "--ok", "--warn", "--err", "--surface-2", "--line"} {
+	for _, need := range []string{"--bg", "--fg", "--dim", "--faint", "--acc", "--on-acc", "--acc-visited", "--ok", "--warn", "--err", "--surface-2", "--line"} {
 		if _, ok := tok[need]; !ok {
 			t.Fatalf("token %s is missing from :root", need)
 		}
@@ -122,6 +122,9 @@ func TestTokenContrast(t *testing.T) {
 		{"warn (--warn on --bg)", mustHex(t, tok["--warn"]), bg, 4.5},
 		{"err (--err on --bg)", mustHex(t, tok["--err"]), bg, 4.5},
 		{"tag text (--dim on --surface-2)", mustHex(t, tok["--dim"]), mustHex(t, tok["--surface-2"]), 4.5},
+		{"placeholder text (--faint on --bg)", mustHex(t, tok["--faint"]), bg, 4.5},
+		{"table header (--faint on --bg)", mustHex(t, tok["--faint"]), bg, 4.5},
+		{"meta chip (--dim on --surface-2 backgrounds)", mustHex(t, tok["--faint"]), mustHex(t, tok["--surface-2"]), 4.0},
 	}
 	for _, c := range cases {
 		if got := contrast(c.fg, c.bg); got < c.min {
