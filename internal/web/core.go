@@ -1,7 +1,6 @@
 package web
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,16 +53,13 @@ func (s *Server) savePart(w http.ResponseWriter, r *http.Request, p *store.Part)
 	p.Currency = orDefault(r.FormValue("currency"), "EUR")
 	p.VendorURL = r.FormValue("vendor_url")
 	p.DatasheetURL = r.FormValue("datasheet_url")
-	p.Attrs = orDefault(r.FormValue("attrs"), "{}")
+	p.MPN = strings.TrimSpace(r.FormValue("mpn"))
+	p.Manufacturer = strings.TrimSpace(r.FormValue("manufacturer"))
 	p.Notes = r.FormValue("notes")
 	p.UnitPrice = parseOptFloat(r.FormValue("unit_price"))
 	p.PartDBID = parseOptInt(r.FormValue("partdb_id"))
 	if p.Name == "" {
 		http.Error(w, "name required", 400)
-		return
-	}
-	if p.Attrs != "{}" && !json.Valid([]byte(p.Attrs)) {
-		http.Error(w, "attrs must be valid JSON", 400)
 		return
 	}
 	id, err := store.UpsertPart(s.db, p)

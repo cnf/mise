@@ -16,6 +16,8 @@ type Part struct {
 	VendorURL    string   `json:"vendor_url"`
 	DatasheetURL string   `json:"datasheet_url"`
 	PartDBID     *int64   `json:"partdb_id"`
+	MPN          string   `json:"mpn"`
+	Manufacturer string   `json:"manufacturer"`
 	Attrs        string   `json:"attrs"`
 	Notes        string   `json:"notes"`
 }
@@ -23,12 +25,12 @@ type Part struct {
 // ---------- parts ----------
 
 func ListParts(db *sql.DB, q string) ([]Part, error) {
-	sqlStr := `SELECT id,name,kind,description,unit_price,currency,vendor_url,datasheet_url,partdb_id,attrs,notes FROM part`
+	sqlStr := `SELECT id,name,kind,description,unit_price,currency,vendor_url,datasheet_url,partdb_id,mpn,manufacturer,attrs,notes FROM part`
 	var args []any
 	if s := strings.TrimSpace(q); s != "" {
-		sqlStr += ` WHERE name LIKE ? OR description LIKE ? OR attrs LIKE ?`
+		sqlStr += ` WHERE name LIKE ? OR description LIKE ? OR attrs LIKE ? OR mpn LIKE ? OR manufacturer LIKE ?`
 		like := "%" + s + "%"
-		args = append(args, like, like, like)
+		args = append(args, like, like, like, like, like)
 	}
 	sqlStr += ` ORDER BY kind, name COLLATE NOCASE`
 	rows, err := db.Query(sqlStr, args...)
@@ -40,9 +42,9 @@ func ListParts(db *sql.DB, q string) ([]Part, error) {
 }
 
 func GetPart(db *sql.DB, id int64) (*Part, error) {
-	row := db.QueryRow(`SELECT id,name,kind,description,unit_price,currency,vendor_url,datasheet_url,partdb_id,attrs,notes FROM part WHERE id=?`, id)
+	row := db.QueryRow(`SELECT id,name,kind,description,unit_price,currency,vendor_url,datasheet_url,partdb_id,mpn,manufacturer,attrs,notes FROM part WHERE id=?`, id)
 	var p Part
-	err := row.Scan(&p.ID, &p.Name, &p.Kind, &p.Description, &p.UnitPrice, &p.Currency, &p.VendorURL, &p.DatasheetURL, &p.PartDBID, &p.Attrs, &p.Notes)
+	err := row.Scan(&p.ID, &p.Name, &p.Kind, &p.Description, &p.UnitPrice, &p.Currency, &p.VendorURL, &p.DatasheetURL, &p.PartDBID, &p.MPN, &p.Manufacturer, &p.Attrs, &p.Notes)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -60,16 +62,16 @@ func UpsertPart(db *sql.DB, p *Part) (int64, error) {
 		p.Currency = "EUR"
 	}
 	if p.ID == 0 {
-		res, err := db.Exec(`INSERT INTO part (name,kind,description,unit_price,currency,vendor_url,datasheet_url,partdb_id,attrs,notes)
-			VALUES (?,?,?,?,?,?,?,?,?,?)`,
-			p.Name, p.Kind, p.Description, p.UnitPrice, p.Currency, p.VendorURL, p.DatasheetURL, p.PartDBID, p.Attrs, p.Notes)
+		res, err := db.Exec(`INSERT INTO part (name,kind,description,unit_price,currency,vendor_url,datasheet_url,partdb_id,mpn,manufacturer,attrs,notes)
+			VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+			p.Name, p.Kind, p.Description, p.UnitPrice, p.Currency, p.VendorURL, p.DatasheetURL, p.PartDBID, p.MPN, p.Manufacturer, p.Attrs, p.Notes)
 		if err != nil {
 			return 0, err
 		}
 		return res.LastInsertId()
 	}
-	_, err := db.Exec(`UPDATE part SET name=?,kind=?,description=?,unit_price=?,currency=?,vendor_url=?,datasheet_url=?,partdb_id=?,attrs=?,notes=?,updated_at=datetime('now') WHERE id=?`,
-		p.Name, p.Kind, p.Description, p.UnitPrice, p.Currency, p.VendorURL, p.DatasheetURL, p.PartDBID, p.Attrs, p.Notes, p.ID)
+	_, err := db.Exec(`UPDATE part SET name=?,kind=?,description=?,unit_price=?,currency=?,vendor_url=?,datasheet_url=?,partdb_id=?,mpn=?,manufacturer=?,attrs=?,notes=?,updated_at=datetime('now') WHERE id=?`,
+		p.Name, p.Kind, p.Description, p.UnitPrice, p.Currency, p.VendorURL, p.DatasheetURL, p.PartDBID, p.MPN, p.Manufacturer, p.Attrs, p.Notes, p.ID)
 	return p.ID, err
 }
 
@@ -98,7 +100,7 @@ func scanParts(rows *sql.Rows) ([]Part, error) {
 	var out []Part
 	for rows.Next() {
 		var p Part
-		if err := rows.Scan(&p.ID, &p.Name, &p.Kind, &p.Description, &p.UnitPrice, &p.Currency, &p.VendorURL, &p.DatasheetURL, &p.PartDBID, &p.Attrs, &p.Notes); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Kind, &p.Description, &p.UnitPrice, &p.Currency, &p.VendorURL, &p.DatasheetURL, &p.PartDBID, &p.MPN, &p.Manufacturer, &p.Attrs, &p.Notes); err != nil {
 			return nil, err
 		}
 		out = append(out, p)

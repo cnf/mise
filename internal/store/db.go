@@ -241,6 +241,18 @@ DROP TABLE manual_step;
 ALTER TABLE manual_step_new RENAME TO manual_step;
 CREATE INDEX IF NOT EXISTS idx_step_assembly ON manual_step(assembly_id);
 `},
+
+	// 005 gives MPN and manufacturer their own columns. They used to be tucked into
+	// the free-form attrs JSON by the Part-DB picker; attrs stays, read-only, for
+	// the iBOM import data (refs/value/footprint).
+	{"005_part_mpn", `
+ALTER TABLE part ADD COLUMN mpn TEXT NOT NULL DEFAULT '';
+ALTER TABLE part ADD COLUMN manufacturer TEXT NOT NULL DEFAULT '';
+UPDATE part SET
+  mpn = COALESCE(json_extract(attrs, '$.mpn'), ''),
+  manufacturer = COALESCE(json_extract(attrs, '$.manufacturer'), '')
+WHERE json_valid(attrs);
+`},
 }
 
 // OpenDB opens (creating if needed) the SQLite database at path and applies any

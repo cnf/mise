@@ -59,7 +59,7 @@
 <p class="lede">The global part list — hardware, printed parts and Part-DB-linked components. Read-only against Part-DB.</p>
 <div class="modebar">
 <form class="inline" method="get" action="/parts">
-  <input name="q" value="{{.Q}}" placeholder="search name / description / attrs" style="width:20rem">
+  <input name="q" value="{{.Q}}" placeholder="search name, MPN, description" style="width:20rem">
   <button>Search</button>
   {{if .Q}}<a href="/parts"><button class="ghost" type="button">Clear</button></a>{{end}}
 </form>
@@ -103,6 +103,8 @@
   <div class="row"><label>Description</label><input name="description" value="{{.Part.Description}}" style="width:34rem"></div>
   <div class="row"><label>Unit price</label><input name="unit_price" value="{{price .Part.UnitPrice}}" style="width:8rem">
     <input name="currency" value="{{.Part.Currency}}" style="width:5rem"></div>
+  <div class="row"><label>MPN</label><input name="mpn" value="{{.Part.MPN}}" style="width:20rem" placeholder="manufacturer part number"></div>
+  <div class="row"><label>Manufacturer</label><input name="manufacturer" value="{{.Part.Manufacturer}}" style="width:20rem"></div>
   <div class="row"><label>Vendor URL</label><input name="vendor_url" value="{{.Part.VendorURL}}" style="width:34rem"></div>
   <div class="row"><label>Datasheet URL</label><input name="datasheet_url" value="{{.Part.DatasheetURL}}" style="width:34rem"></div>
   <div class="row"><label>Part-DB</label>
@@ -115,8 +117,7 @@
       <div id="pdbhits" class="hits" hidden></div>
       <div id="pdbmsg" class="small muted">Picking a result links the part and fills only the fields that are still empty.</div>
     </div></div>
-  <div class="row"><label>Attrs (JSON)</label><input name="attrs" value="{{.Part.Attrs}}" style="width:34rem"></div>
-  <div class="row"><label>Notes</label><textarea name="notes">{{.Part.Notes}}</textarea></div>
+    <div class="row"><label>Notes</label><textarea name="notes">{{.Part.Notes}}</textarea></div>
   <p><button>Save</button> <a href="/parts"><button class="ghost" type="button">Cancel</button></a></p>
 </form></div></div>
 {{if .Part.ID}}
@@ -137,11 +138,8 @@ const pick=x=>{
   if(fillEmpty('name',x.name))did.push('name');
   if(fillEmpty('description',x.description))did.push('description');
   if(fillEmpty('datasheet_url',x.datasheet_url))did.push('datasheet');
-  const a=f('attrs');let o={};try{o=JSON.parse(a.value||'{}')||{}}catch(e){o=null}
-  if(o){let ch=false;
-    if(x.mpn&&!o.mpn){o.mpn=x.mpn;ch=true}
-    if(x.manufacturer&&!o.manufacturer){o.manufacturer=x.manufacturer;ch=true}
-    if(ch){a.value=JSON.stringify(o);did.push('MPN/manufacturer')}}
+  if(fillEmpty('mpn',x.mpn&&x.mpn!==x.name?x.mpn:''))did.push('MPN');
+  if(fillEmpty('manufacturer',x.manufacturer))did.push('manufacturer');
   lnk.href=lnk.dataset.tpl.replace('/part/0/','/part/'+x.partdb_id+'/');lnk.hidden=false;
   hits.hidden=true;q.value='';
   msg.textContent='Linked Part-DB #'+x.partdb_id+(did.length?' — filled '+did.join(', ')+'.':' — nothing to fill, all fields already set.')+' Save to keep it.';
@@ -176,11 +174,12 @@ let t;q.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(async()=>{
 <div class="card panel">
   <div class="hd2"><h2>Details</h2><span class="r"><a href="/parts/{{.Part.ID}}/edit">Edit part</a></span></div>
   <div class="pad">
+  {{if or .Part.MPN .Part.Manufacturer}}<p>{{if .Part.Manufacturer}}{{.Part.Manufacturer}}{{end}}{{if and .Part.MPN .Part.Manufacturer}} · {{end}}{{if .Part.MPN}}<code>{{.Part.MPN}}</code>{{end}}</p>{{end}}
   {{if .Part.VendorURL}}<p><a href="{{.Part.VendorURL}}" target="_blank" rel="noopener">vendor page</a></p>{{end}}
   {{if .Part.DatasheetURL}}<p><a href="{{.Part.DatasheetURL}}" target="_blank" rel="noopener">datasheet</a></p>{{end}}
-  {{if .Part.Attrs}}{{if ne .Part.Attrs "{}"}}<h3>Attrs</h3><pre class="small muted">{{.Part.Attrs}}</pre>{{end}}{{end}}
+  {{if .Part.Attrs}}{{if ne .Part.Attrs "{}"}}<h3>Board data</h3><pre class="small muted">{{.Part.Attrs}}</pre>{{end}}{{end}}
   {{if .Part.Notes}}<h3>Notes</h3><p>{{.Part.Notes}}</p>{{end}}
-  {{if not (or .Part.VendorURL .Part.DatasheetURL .Part.Notes)}}<p class="muted small">No vendor link, datasheet or notes yet.</p>{{end}}
+  {{if not (or .Part.VendorURL .Part.DatasheetURL .Part.Notes .Part.MPN .Part.Manufacturer)}}<p class="muted small">No MPN, vendor link or notes yet.</p>{{end}}
   </div>
 </div>
 {{template "foot" .}}{{end}}

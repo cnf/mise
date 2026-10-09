@@ -85,3 +85,44 @@ func TestDocumentMigrationPreservesSteps(t *testing.T) {
 		t.Error("the widened CHECK no longer rejects an unknown item_type")
 	}
 }
+
+// TestMPNMigrationMovesAttrsOut: 005 adds mpn/manufacturer columns and must copy
+// what the Part-DB picker had stashed in attrs, leaving iBOM attrs untouched.
+func TestMPNMigrationMovesAttrsOut(t *testing.T) {
+	db, err := store.OpenDB(filepath.Join(t.TempDir(), "u.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// back to the pre-005 shape: drop the columns, forget the migration
+	for _, q := range []string{
+		`DELETE FROM migrations WHERE name='005_part_mpn'`,
+		`ALTER TABLE part DROP COLUMN mpn`,
+		`ALTER TABLE part DROP COLUMN manufacturer`,
+		`INSERT INTO part (name,attrs) VALUES ('picked','{"mpn":"ESP32-X","manufacturer":"Espressif"}')`,
+		`INSERT INTO part (name,attrs) VALUES ('board','{"refs":["R1"],"value":"10k","footprint":"0805"}')`,
+		`INSERT INTO part (name,attrs) VALUES ('junk','not json')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if err := store.Migrate(db); err != nil {
+		t.Fatal(err)
+	}
+	get := func(name string) (mpn, man, attrs string) {
+		if err := db.QueryRow(`SELECT mpn,manufacturer,attrs FROM part WHERE name=?`, name).Scan(&mpn, &man, &attrs); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if m, f, _ := get("picked"); m != "ESP32-X" || f != "Espressif" {
+		t.Errorf("picked: mpn=%q man=%q", m, f)
+	}
+	if m, f, a := get("board"); m != "" || f != "" || a == "{}" {
+		t.Errorf("board data disturbed: %q %q %q", m, f, a)
+	}
+	if m, f, a := get("junk"); m != "" || f != "" || a != "not json" {
+		t.Errorf("junk row: %q %q %q", m, f, a)
+	}
+}
