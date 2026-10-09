@@ -839,15 +839,23 @@ type Step struct {
 	Document  *Document `json:"document"` // document steps: an embedded iBOM
 }
 
-// Document is an InteractiveHtmlBom file attached to a step and shown embedded
-// in the manual. It is stored whole (it is one self-contained HTML file) and
-// served from /documents/{id}; the step is a placeholder that gives it a place
-// in the sequence.
+// Document is an embedded asset attached to a step and shown on the manual
+// page. The mime decides how it renders: an InteractiveHtmlBom file is shown in
+// a sandboxed iframe, a glTF binary in a model-viewer canvas. Both are stored
+// whole and served from /documents/{id}; the step is a placeholder that gives
+// the asset a place in the sequence.
 type Document struct {
 	ID       int64
 	StepID   int64
 	Filename string
+	Mime     string
 	Size     int64
+}
+
+// IsModel reports whether the embedded asset is a 3D model (rendered with
+// model-viewer) rather than a markup document (rendered in an iframe).
+func (d *Document) IsModel() bool {
+	return d != nil && d.Mime == "model/gltf-binary"
 }
 
 type Image struct {
@@ -1054,21 +1062,35 @@ func deleteImage(db *sql.DB, id int64) error {
 	return err
 }
 
-// ---------- step documents (embedded iBOM) ----------
+// ---------- step documents (embedded iBOM / 3D model) ----------
 
-// iBOMs are ~300 KiB of self-contained HTML; a step carries at most one.
-const maxDocumentBytes = 32 << 20 // 32 MiB
+// Embedded assets are self-contained files: an iBOM is ~300 KiB of HTML, a glTF
+// binary model is a few MiB. A step carries at most one.
+const maxDocumentBytes = 64 << 20 // 64 MiB
 
-// looksLikeIBOM is the only check we can make cheaply on the way in: the file
-// must be an InteractiveHtmlBom export, identified by the pcbdata blob the
-// importer later decodes. Storing a file we cannot read would only fail later
-// in the iframe, so refuse it here.
-func looksLikeIBOM(data []byte) bool {
-	return ibomRe.Match(data)
+// sniffDocument identifies an embedded asset by content and returns the mime it
+// must be served with. We only store files we can actually render, so a file
+// that is neither gets refused on the way in rather than failing later in the
+// browser.
+func sniffDocument(data []byte) (mime string, ok bool) {
+	// InteractiveHtmlBom: identified by the pcbdata blob the importer decodes.
+	if ibomRe.Match(data) {
+		return "text/html; charset=utf-8", true
+	}
+	// glTF binary: magic "glTF" (0x46546C67), then a uint32 version that must be
+	// 2, then the total length. Checking all three rejects a coincidental match.
+	if len(data) >= 12 && string(data[0:4]) == "glTF" {
+		ver := uint32(data[4]) | uint32(data[5])<<8 | uint32(data[6])<<16 | uint32(data[7])<<24
+		if ver == 2 {
+			return "model/gltf-binary", true
+		}
+	}
+	return "", false
 }
 
-// addDocument attaches an iBOM to a step. A step holds one; re-adding replaces
-// it, which is how a re-exported board is updated in place.
+// addDocument attaches an asset to a step. A step holds one; re-adding replaces
+// it, whichever kind it was, which is how a re-exported board or model is
+// updated in place.
 func addDocument(db *sql.DB, stepID int64, filename string, data []byte) (int64, error) {
 	if len(data) == 0 {
 		return 0, fmt.Errorf("empty file")
@@ -1076,14 +1098,15 @@ func addDocument(db *sql.DB, stepID int64, filename string, data []byte) (int64,
 	if len(data) > maxDocumentBytes {
 		return 0, fmt.Errorf("file is %d bytes, limit is %d", len(data), maxDocumentBytes)
 	}
-	if !looksLikeIBOM(data) {
-		return 0, fmt.Errorf("not an InteractiveHtmlBom file (no pcbdata blob found)")
+	mime, ok := sniffDocument(data)
+	if !ok {
+		return 0, fmt.Errorf("unrecognised file: expected an InteractiveHtmlBom export or a glTF binary model")
 	}
 	if _, err := db.Exec(`DELETE FROM document WHERE step_id=?`, stepID); err != nil {
 		return 0, err
 	}
 	res, err := db.Exec(`INSERT INTO document (step_id,filename,mime,size,bytes) VALUES (?,?,?,?,?)`,
-		stepID, filename, "text/html; charset=utf-8", len(data), data)
+		stepID, filename, mime, len(data), data)
 	if err != nil {
 		return 0, err
 	}
@@ -1095,8 +1118,8 @@ func addDocument(db *sql.DB, stepID int64, filename string, data []byte) (int64,
 // does not pull every board into memory.
 func stepDocument(db *sql.DB, stepID int64) (*Document, error) {
 	var d Document
-	err := db.QueryRow(`SELECT id,step_id,filename,size FROM document WHERE step_id=?`, stepID).
-		Scan(&d.ID, &d.StepID, &d.Filename, &d.Size)
+	err := db.QueryRow(`SELECT id,step_id,filename,mime,size FROM document WHERE step_id=?`, stepID).
+		Scan(&d.ID, &d.StepID, &d.Filename, &d.Mime, &d.Size)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -1106,10 +1129,11 @@ func stepDocument(db *sql.DB, stepID int64) (*Document, error) {
 	return &d, nil
 }
 
-func documentBytes(db *sql.DB, id int64) ([]byte, error) {
+func documentBytes(db *sql.DB, id int64) ([]byte, string, error) {
 	var b []byte
-	err := db.QueryRow(`SELECT bytes FROM document WHERE id=?`, id).Scan(&b)
-	return b, err
+	var mime string
+	err := db.QueryRow(`SELECT bytes,mime FROM document WHERE id=?`, id).Scan(&b, &mime)
+	return b, mime, err
 }
 
 func deleteDocument(db *sql.DB, id int64) error {
@@ -1207,4 +1231,24 @@ func resolveChild(db *sql.DB, id int64, sel Selection, path map[int64]bool, dept
 		return nil, err
 	}
 	return &ResolvedMan{AssemblyID: id, Title: a.Name, Steps: sub}, nil
+}
+
+// HasModel reports whether the resolved manual contains an embedded 3D model
+// anywhere in its tree, including nested sub-manual references. The manual page
+// uses it to load the model-viewer bundle only when there is something to show,
+// so the ~1 MB script is not fetched for a manual of text and photos.
+func (m *ResolvedMan) HasModel() bool {
+	if m == nil {
+		return false
+	}
+	for i := range m.Steps {
+		s := &m.Steps[i]
+		if s.Document != nil && s.Document.IsModel() {
+			return true
+		}
+		if s.Reference != nil && s.Reference.HasModel() {
+			return true
+		}
+	}
+	return false
 }

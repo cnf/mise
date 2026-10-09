@@ -229,12 +229,15 @@ func TestDocumentStep(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := documentBytes(db, id)
+	got, mime, err := documentBytes(db, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(got) != string(fake) {
 		t.Errorf("document bytes did not round-trip")
+	}
+	if mime != "text/html; charset=utf-8" {
+		t.Errorf("iBOM mime = %q, want text/html", mime)
 	}
 	if d, _ := stepDocument(db, stepID); d == nil || d.Filename != "board.html" || d.Size != int64(len(fake)) {
 		t.Fatalf("stepDocument metadata wrong: %+v", d)
@@ -258,19 +261,18 @@ func TestDocumentStep(t *testing.T) {
 	if d, _ := stepDocument(db, stepID); d == nil || d.ID != id2 || d.Filename != "board2.html" {
 		t.Errorf("step should now point at the replacement, got %+v", d)
 	}
-	got2, err := documentBytes(db, id2)
+	got2, _, err := documentBytes(db, id2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(got2) != string(fake2) {
 		t.Error("the replacement document's bytes are wrong")
 	}
-
 	// deleting the step cascades to its document
 	if err := deleteStep(db, stepID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := documentBytes(db, id2); err == nil {
+	if _, _, err := documentBytes(db, id2); err == nil {
 		t.Error("deleting the step should cascade to its document")
 	}
 }

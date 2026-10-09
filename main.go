@@ -19,6 +19,9 @@ import (
 //go:embed templates/*.html
 var templateFiles embed.FS
 
+//go:embed assets/model-viewer.min.js
+var modelViewerJSBytes []byte
+
 type server struct {
 	db   *sql.DB
 	tmpl *template.Template
@@ -75,6 +78,7 @@ func main() {
 	mux.HandleFunc("/steps/", s.stepByID)
 	mux.HandleFunc("/images/", s.imageByID)
 	mux.HandleFunc("/documents/", s.documentByID)
+	mux.HandleFunc("/assets/model-viewer.min.js", s.modelViewerJS)
 
 	log.Printf("mise listening on %s (db=%s)", *addr, *dbPath)
 	log.Fatal(http.ListenAndServe(*addr, mux))
@@ -787,7 +791,8 @@ func (s *server) manualByID(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "manual_view.html", map[string]any{
 		"Assembly": a, "Manual": m, "Parts": parts, "All": all,
 		"Slots": slots, "Label": label, "BuildQuery": r.URL.Query().Get("build"),
-		"Back": "/assemblies/" + strconv.FormatInt(id, 10),
+		"Back":        "/assemblies/" + strconv.FormatInt(id, 10),
+		"NeedsViewer": m.HasModel(),
 	})
 }
 
@@ -945,11 +950,14 @@ func (s *server) documentUpload(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, back, http.StatusSeeOther)
 }
 
-// documentByID serves an embedded iBOM. The file is served as HTML because the
-// browser must run its scripts to render the board; the CSP sandbox directive
-// puts it in an opaque origin so it cannot reach the parent page or the
-// network even if the file were hostile. This is the only place mise serves
-// user-supplied markup, so the restriction lives here rather than globally.
+// documentByID serves an embedded asset. How it is served depends on what it
+// is. An iBOM is HTML the browser must run to render the board, so it is served
+// as text/html with `Content-Security-Policy: sandbox allow-scripts`, which
+// puts it in an opaque origin: its scripts run but it cannot reach the parent
+// page or the network. A glTF binary is inert data, and must NOT be served as
+// HTML — it goes out with its own type and nosniff so the browser loads it as a
+// model and never as markup. This is the only place mise serves user-supplied
+// bytes, so both restrictions live on this one response.
 func (s *server) documentByID(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/documents/")
 	id, err := strconv.ParseInt(strings.Split(strings.Trim(path, "/"), "/")[0], 10, 64)
@@ -969,15 +977,27 @@ func (s *server) documentByID(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
 	}
-	data, err := documentBytes(s.db, id)
+	data, mime, err := documentBytes(s.db, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Type", mime)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Security-Policy", "sandbox allow-scripts")
+	if mime == "text/html; charset=utf-8" {
+		w.Header().Set("Content-Security-Policy", "sandbox allow-scripts")
+	}
+	w.Header().Set("Cache-Control", "public, max-age=3600")
 	_, _ = w.Write(data)
+}
+
+// modelViewerJS serves the vendored <model-viewer> bundle. It is embedded in the
+// binary (assets/model-viewer.min.js) and served from our own origin, so the
+// viewer needs no CDN at runtime.
+func (s *server) modelViewerJS(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	_, _ = w.Write(modelViewerJSBytes)
 }
 
 func (s *server) imageByID(w http.ResponseWriter, r *http.Request) {

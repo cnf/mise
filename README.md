@@ -107,6 +107,27 @@ that directly — no headless browser — and turns the board into an assembly o
 its components (one part per distinct value+footprint, one line per refdes
 group). DNP/skipped components are left out.
 
+## 3D models
+
+A `document` step can hold a glTF binary (`.glb`) as well as an iBOM, and the
+stored **mime decides how it renders** — no separate step type, so no migration:
+an iBOM goes in a sandboxed iframe, a model in a `<model-viewer>` canvas.
+
+Export the model yourself, from FreeCAD's GUI (File → Export → glTF binary).
+This is not something `mise` can do: FreeCAD's glTF exporter lives in the GUI
+module, so headless `freecadcmd` export is unreliable (FreeCAD issue #8610), and
+the app has no FreeCAD. Whatever the exporter writes, the app takes it.
+
+`<model-viewer>` is embedded in the binary (`assets/model-viewer.min.js`,
+Apache-2.0) and served from our own origin — no CDN at runtime. It is only loaded
+on a manual page that actually contains a model, so a manual of text and photos
+does not fetch a megabyte of JavaScript.
+
+The file is identified by **content, not filename or the client's declared type**:
+a `pcbdata` blob means iBOM, a `glTF` magic with version 2 means a model, and
+anything else is refused. So a GLB named `.html` is still served as a model, and
+an iBOM named `.glb` is still served as sandboxed HTML.
+
 ## Layout
 
 ```
@@ -117,9 +138,11 @@ partdb.go      Part-DB cache sweep + search
 ibom.go        InteractiveHtmlBom decode + assembly import
 lzstring.go    LZString.decompressFromBase64 port
 templates/     server-rendered pages (html/template)
+assets/        vendored JS embedded into the binary
 ```
 
 ## Not in this phase
 
 - PDF export (deliberately never).
-- A FreeCAD→glTF 3D viewer (nice-to-have, phase 5).
+- Any FreeCAD *import* beyond the visual model — the model has no fasteners, belts
+  or wiring, so it can't be the BOM source.

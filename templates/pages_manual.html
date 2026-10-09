@@ -24,7 +24,7 @@
       <option value="note">note — text + photos</option>
       <option value="assembly">follow a sub-assembly's manual</option>
       <option value="slot">follow whichever variant is chosen</option>
-      <option value="document">embedded board (iBOM)</option>
+      <option value="document">embedded board or 3D model</option>
     </select>
   </div>
   <div class="row"><label>Title</label><input name="title" style="width:34rem"></div>
@@ -63,11 +63,11 @@
     {{if eq $s.ItemType "document"}}
       {{if $s.Document}}
         <div class="docbar">
-          <span class="muted small">▸ {{$s.Document.Filename}} · {{$s.Document.Size}} B</span>
+          <span class="muted small">▸ {{$s.Document.Filename}} · {{$s.Document.Size}} B{{if $s.Document.IsModel}} · 3D model{{end}}</span>
           <form method="post" action="/steps/document" enctype="multipart/form-data" class="inline small">
             <input type="hidden" name="step_id" value="{{$s.ID}}">
             <input type="hidden" name="_back" value="/manuals/{{$aid}}">
-            <input type="file" name="document" accept=".html" required>
+            <input type="file" name="document" required>
             <button class="ghost small">replace</button>
           </form>
           <form method="post" action="/documents/{{$s.Document.ID}}" class="inline small">
@@ -76,14 +76,19 @@
             <button class="danger small">detach</button>
           </form>
         </div>
-        <iframe class="ibom" src="/documents/{{$s.Document.ID}}" sandbox="allow-scripts" loading="lazy" title="interactive board"></iframe>
+        {{if $s.Document.IsModel}}
+          <model-viewer class="model" src="/documents/{{$s.Document.ID}}" alt="{{$s.Title}}" camera-controls touch-action="pan-y" shadow-intensity="0.6" exposure="1.0" style="background:#0e1015"></model-viewer>
+        {{else}}
+          <iframe class="ibom" src="/documents/{{$s.Document.ID}}" sandbox="allow-scripts" loading="lazy" title="interactive board"></iframe>
+        {{end}}
       {{else}}
         <form method="post" action="/steps/document" enctype="multipart/form-data" class="inline small">
           <input type="hidden" name="step_id" value="{{$s.ID}}">
           <input type="hidden" name="_back" value="/manuals/{{$aid}}">
-          <input type="file" name="document" accept=".html" required>
-          <button class="ghost small">attach board</button>
+          <input type="file" name="document" required>
+          <button class="ghost small">attach board or model</button>
         </form>
+        <p class="muted small">an InteractiveHtmlBom export, or a glTF binary (.glb) exported from FreeCAD</p>
       {{end}}
     {{end}}
 
