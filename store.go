@@ -833,9 +833,21 @@ type Step struct {
 	ChildAssemblyID *int64 `json:"child_assembly_id"`
 	SlotID          *int64 `json:"slot_id"`
 
-	ChildName string  `json:"child_name"`
-	SlotName  string  `json:"slot_name"`
-	Images    []Image `json:"images"`
+	ChildName string    `json:"child_name"`
+	SlotName  string    `json:"slot_name"`
+	Images    []Image   `json:"images"`
+	Document  *Document `json:"document"` // document steps: an embedded iBOM
+}
+
+// Document is an InteractiveHtmlBom file attached to a step and shown embedded
+// in the manual. It is stored whole (it is one self-contained HTML file) and
+// served from /documents/{id}; the step is a placeholder that gives it a place
+// in the sequence.
+type Document struct {
+	ID       int64
+	StepID   int64
+	Filename string
+	Size     int64
 }
 
 type Image struct {
@@ -880,6 +892,13 @@ func steps(db *sql.DB, assemblyID int64) ([]Step, error) {
 			return nil, err
 		}
 		out[i].Images = imgs
+		if out[i].ItemType == "document" {
+			doc, err := stepDocument(db, out[i].ID)
+			if err != nil {
+				return nil, err
+			}
+			out[i].Document = doc
+		}
 	}
 	return out, nil
 }
@@ -902,6 +921,12 @@ func getStep(db *sql.DB, id int64) (*Step, error) {
 		return nil, err
 	}
 	st.Images, err = stepImages(db, id)
+	if err != nil {
+		return nil, err
+	}
+	if st.ItemType == "document" {
+		st.Document, err = stepDocument(db, id)
+	}
 	return &st, err
 }
 
@@ -1026,6 +1051,69 @@ func imageBytes(db *sql.DB, id int64) ([]byte, string, error) {
 
 func deleteImage(db *sql.DB, id int64) error {
 	_, err := db.Exec(`DELETE FROM step_image WHERE id=?`, id)
+	return err
+}
+
+// ---------- step documents (embedded iBOM) ----------
+
+// iBOMs are ~300 KiB of self-contained HTML; a step carries at most one.
+const maxDocumentBytes = 32 << 20 // 32 MiB
+
+// looksLikeIBOM is the only check we can make cheaply on the way in: the file
+// must be an InteractiveHtmlBom export, identified by the pcbdata blob the
+// importer later decodes. Storing a file we cannot read would only fail later
+// in the iframe, so refuse it here.
+func looksLikeIBOM(data []byte) bool {
+	return ibomRe.Match(data)
+}
+
+// addDocument attaches an iBOM to a step. A step holds one; re-adding replaces
+// it, which is how a re-exported board is updated in place.
+func addDocument(db *sql.DB, stepID int64, filename string, data []byte) (int64, error) {
+	if len(data) == 0 {
+		return 0, fmt.Errorf("empty file")
+	}
+	if len(data) > maxDocumentBytes {
+		return 0, fmt.Errorf("file is %d bytes, limit is %d", len(data), maxDocumentBytes)
+	}
+	if !looksLikeIBOM(data) {
+		return 0, fmt.Errorf("not an InteractiveHtmlBom file (no pcbdata blob found)")
+	}
+	if _, err := db.Exec(`DELETE FROM document WHERE step_id=?`, stepID); err != nil {
+		return 0, err
+	}
+	res, err := db.Exec(`INSERT INTO document (step_id,filename,mime,size,bytes) VALUES (?,?,?,?,?)`,
+		stepID, filename, "text/html; charset=utf-8", len(data), data)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// stepDocument returns the document attached to a step, or nil. The bytes are
+// not loaded here — only metadata — so a manual page with many document steps
+// does not pull every board into memory.
+func stepDocument(db *sql.DB, stepID int64) (*Document, error) {
+	var d Document
+	err := db.QueryRow(`SELECT id,step_id,filename,size FROM document WHERE step_id=?`, stepID).
+		Scan(&d.ID, &d.StepID, &d.Filename, &d.Size)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+func documentBytes(db *sql.DB, id int64) ([]byte, error) {
+	var b []byte
+	err := db.QueryRow(`SELECT bytes FROM document WHERE id=?`, id).Scan(&b)
+	return b, err
+}
+
+func deleteDocument(db *sql.DB, id int64) error {
+	_, err := db.Exec(`DELETE FROM document WHERE id=?`, id)
 	return err
 }
 

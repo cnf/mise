@@ -198,6 +198,49 @@ CREATE TABLE IF NOT EXISTS step_image (
 );
 CREATE INDEX IF NOT EXISTS idx_image_step ON step_image(step_id);
 `},
+
+	// 004 embeds a KiCad InteractiveHtmlBom file as a step's own content: the
+	// board is stored (like an image) and served from /documents/{id}, to be
+	// shown in an iframe on the manual page. This is what makes phase 3's
+	// "phase 4" note real, and it needs a new step type, so manual_step is
+	// rebuilt to widen its CHECK constraint.
+	{"004_documents", `
+CREATE TABLE IF NOT EXISTS document (
+  id         INTEGER PRIMARY KEY,
+  step_id    INTEGER NOT NULL REFERENCES manual_step(id) ON DELETE CASCADE,
+  filename   TEXT NOT NULL DEFAULT '',
+  mime       TEXT NOT NULL DEFAULT 'text/html; charset=utf-8',
+  size       INTEGER NOT NULL DEFAULT 0,
+  bytes      BLOB NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_document_step ON document(step_id);
+
+CREATE TABLE IF NOT EXISTS manual_step_new (
+  id                INTEGER PRIMARY KEY,
+  assembly_id       INTEGER NOT NULL REFERENCES assembly(id) ON DELETE CASCADE,
+  sort              INTEGER NOT NULL DEFAULT 0,
+  item_type         TEXT NOT NULL CHECK (item_type IN ('note','assembly','slot','document')),
+  title             TEXT NOT NULL DEFAULT '',
+  body              TEXT NOT NULL DEFAULT '',
+  child_assembly_id INTEGER REFERENCES assembly(id) ON DELETE RESTRICT,
+  slot_id           INTEGER REFERENCES variant_slot(id) ON DELETE RESTRICT,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  CHECK (
+    (item_type = 'note'     AND child_assembly_id IS NULL     AND slot_id IS NULL) OR
+    (item_type = 'document' AND child_assembly_id IS NULL     AND slot_id IS NULL) OR
+    (item_type = 'assembly' AND child_assembly_id IS NOT NULL AND slot_id IS NULL) OR
+    (item_type = 'slot'     AND slot_id IS NOT NULL           AND child_assembly_id IS NULL)
+  ),
+  CHECK (child_assembly_id IS NULL OR child_assembly_id <> assembly_id)
+);
+INSERT INTO manual_step_new (id, assembly_id, sort, item_type, title, body, child_assembly_id, slot_id, created_at, updated_at)
+  SELECT id, assembly_id, sort, item_type, title, body, child_assembly_id, slot_id, created_at, updated_at FROM manual_step;
+DROP TABLE manual_step;
+ALTER TABLE manual_step_new RENAME TO manual_step;
+CREATE INDEX IF NOT EXISTS idx_step_assembly ON manual_step(assembly_id);
+`},
 }
 
 // openDB opens (creating if needed) the SQLite database at path and applies any

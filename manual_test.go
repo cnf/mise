@@ -202,6 +202,79 @@ func TestDeleteGuardsForManual(t *testing.T) {
 	}
 }
 
+// TestDocumentStep covers the phase-4 embedded board: a document step stores an
+// iBOM, replaces it on re-upload, round-trips bytes, and refuses a file that is
+// not an InteractiveHtmlBom export.
+func TestDocumentStep(t *testing.T) {
+	db, ids := mkFixture(t)
+	stepID, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "document", Title: "the board"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// a note step does not get a document attached by stepDocument
+	if d, err := stepDocument(db, stepID); err != nil || d != nil {
+		t.Fatalf("a fresh document step should have no document: %v %v", d, err)
+	}
+
+	// refuse a file that is not an iBOM
+	if _, err := addDocument(db, stepID, "not.html", []byte("<html>hi</html>")); err == nil {
+		t.Error("a non-iBOM file should be refused")
+	}
+	if _, err := addDocument(db, stepID, "empty.html", nil); err == nil {
+		t.Error("an empty file should be refused")
+	}
+
+	fake := []byte(`<html><script>var pcbdata = JSON.parse(LZString.decompressFromBase64("AAA"));</script></html>`)
+	id, err := addDocument(db, stepID, "board.html", fake)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := documentBytes(db, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(fake) {
+		t.Errorf("document bytes did not round-trip")
+	}
+	if d, _ := stepDocument(db, stepID); d == nil || d.Filename != "board.html" || d.Size != int64(len(fake)) {
+		t.Fatalf("stepDocument metadata wrong: %+v", d)
+	}
+
+	// re-upload replaces, so a re-exported board lands in place. SQLite reuses
+	// the rowid after a delete (no AUTOINCREMENT), so assert on the content and
+	// the count, not on the id changing.
+	fake2 := []byte(`<html><script>var pcbdata = JSON.parse(LZString.decompressFromBase64("BBB"));</script></html>`)
+	id2, err := addDocument(db, stepID, "board2.html", fake2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM document WHERE step_id=?`, stepID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("re-upload should leave one document, got %d", count)
+	}
+	if d, _ := stepDocument(db, stepID); d == nil || d.ID != id2 || d.Filename != "board2.html" {
+		t.Errorf("step should now point at the replacement, got %+v", d)
+	}
+	got2, err := documentBytes(db, id2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got2) != string(fake2) {
+		t.Error("the replacement document's bytes are wrong")
+	}
+
+	// deleting the step cascades to its document
+	if err := deleteStep(db, stepID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := documentBytes(db, id2); err == nil {
+		t.Error("deleting the step should cascade to its document")
+	}
+}
+
 // TestManualTemplatesRender covers the pages added in phase 3, in the same test
 // that guards pointer-dereference mistakes: every page must execute.
 func TestManualTemplatesRender(t *testing.T) {
@@ -215,6 +288,14 @@ func TestManualTemplatesRender(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "slot", SlotID: p(ids["slot"]), Title: "board"}); err != nil {
+		t.Fatal(err)
+	}
+	docStep, err := addStep(db, &Step{AssemblyID: ids["frame"], ItemType: "document", Title: "the board"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := []byte(`<html><script>var pcbdata = JSON.parse(LZString.decompressFromBase64("AAA"));</script></html>`)
+	if _, err := addDocument(db, docStep, "board.html", fake); err != nil {
 		t.Fatal(err)
 	}
 
@@ -236,7 +317,7 @@ func TestManualTemplatesRender(t *testing.T) {
 		t.Fatalf("manual_view: %v", err)
 	}
 	out := buf.String()
-	for _, want := range []string{"Manual:", "hello", "cap", "variant:", "sub-manual"} {
+	for _, want := range []string{"Manual:", "hello", "cap", "variant:", "sub-manual", `src="/documents/`, "board.html"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("manual page missing %q", want)
 		}

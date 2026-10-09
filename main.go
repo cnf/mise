@@ -71,8 +71,10 @@ func main() {
 	mux.HandleFunc("/manuals/", s.manualByID)
 	mux.HandleFunc("/steps/new", s.stepNew)
 	mux.HandleFunc("/steps/upload", s.imageUpload)
+	mux.HandleFunc("/steps/document", s.documentUpload)
 	mux.HandleFunc("/steps/", s.stepByID)
 	mux.HandleFunc("/images/", s.imageByID)
+	mux.HandleFunc("/documents/", s.documentByID)
 
 	log.Printf("mise listening on %s (db=%s)", *addr, *dbPath)
 	log.Fatal(http.ListenAndServe(*addr, mux))
@@ -859,7 +861,8 @@ func (s *server) stepNew(w http.ResponseWriter, r *http.Request) {
 		Body:       r.FormValue("body"),
 	}
 	switch st.ItemType {
-	case "note":
+	case "note", "document":
+		// document steps carry no reference; the file is attached after creation
 	case "assembly":
 		st.ChildAssemblyID = parseOptInt(r.FormValue("child_assembly_id"))
 		if st.ChildAssemblyID == nil {
@@ -894,6 +897,87 @@ func (s *server) stepNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, back, http.StatusSeeOther)
+}
+
+// documentUpload stores an iBOM against a document step, shown embedded in the
+// manual. Re-uploading replaces it, so a re-exported board is updated in place.
+func (s *server) documentUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseMultipartForm(maxDocumentBytes + (1 << 20)); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	stepID := parseOptInt(r.FormValue("step_id"))
+	if stepID == nil {
+		http.Error(w, "step_id required", 400)
+		return
+	}
+	// Only a document step renders an embedded board; attaching one to any other
+	// step would store bytes no page ever shows.
+	st, err := getStep(s.db, *stepID)
+	if err != nil || st == nil {
+		http.Error(w, "no such step", 404)
+		return
+	}
+	if st.ItemType != "document" {
+		http.Error(w, "only a document step can carry an embedded board", 400)
+		return
+	}
+	back := orDefault(r.FormValue("_back"), "/")
+	fh, hdr, err := r.FormFile("document")
+	if err != nil {
+		http.Error(w, "file required", 400)
+		return
+	}
+	defer fh.Close()
+	data, err := io.ReadAll(io.LimitReader(fh, maxDocumentBytes+1))
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if _, err := addDocument(s.db, *stepID, hdr.Filename, data); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
+}
+
+// documentByID serves an embedded iBOM. The file is served as HTML because the
+// browser must run its scripts to render the board; the CSP sandbox directive
+// puts it in an opaque origin so it cannot reach the parent page or the
+// network even if the file were hostile. This is the only place mise serves
+// user-supplied markup, so the restriction lives here rather than globally.
+func (s *server) documentByID(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/documents/")
+	id, err := strconv.ParseInt(strings.Split(strings.Trim(path, "/"), "/")[0], 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method == http.MethodPost {
+		_ = r.ParseForm()
+		back := orDefault(r.FormValue("_back"), "/")
+		if r.FormValue("_action") == "delete" {
+			if err := deleteDocument(s.db, id); err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+		}
+		http.Redirect(w, r, back, http.StatusSeeOther)
+		return
+	}
+	data, err := documentBytes(s.db, id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "sandbox allow-scripts")
+	_, _ = w.Write(data)
 }
 
 func (s *server) imageByID(w http.ResponseWriter, r *http.Request) {

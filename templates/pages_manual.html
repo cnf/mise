@@ -24,6 +24,7 @@
       <option value="note">note — text + photos</option>
       <option value="assembly">follow a sub-assembly's manual</option>
       <option value="slot">follow whichever variant is chosen</option>
+      <option value="document">embedded board (iBOM)</option>
     </select>
   </div>
   <div class="row"><label>Title</label><input name="title" style="width:34rem"></div>
@@ -58,6 +59,33 @@
       {{if eq $s.ItemType "slot"}}<span class="tag">variant: {{$s.SlotName}}{{if $s.ChosenLabel}} → {{$s.ChosenLabel}}{{end}}</span>{{end}}
     </div>
     {{if $s.Body}}<div class="steptext">{{$s.Body}}</div>{{end}}
+
+    {{if eq $s.ItemType "document"}}
+      {{if $s.Document}}
+        <div class="docbar">
+          <span class="muted small">▸ {{$s.Document.Filename}} · {{$s.Document.Size}} B</span>
+          <form method="post" action="/steps/document" enctype="multipart/form-data" class="inline small">
+            <input type="hidden" name="step_id" value="{{$s.ID}}">
+            <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+            <input type="file" name="document" accept=".html" required>
+            <button class="ghost small">replace</button>
+          </form>
+          <form method="post" action="/documents/{{$s.Document.ID}}" class="inline small">
+            <input type="hidden" name="_action" value="delete">
+            <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+            <button class="danger small">detach</button>
+          </form>
+        </div>
+        <iframe class="ibom" src="/documents/{{$s.Document.ID}}" sandbox="allow-scripts" loading="lazy" title="interactive board"></iframe>
+      {{else}}
+        <form method="post" action="/steps/document" enctype="multipart/form-data" class="inline small">
+          <input type="hidden" name="step_id" value="{{$s.ID}}">
+          <input type="hidden" name="_back" value="/manuals/{{$aid}}">
+          <input type="file" name="document" accept=".html" required>
+          <button class="ghost small">attach board</button>
+        </form>
+      {{end}}
+    {{end}}
 
     {{range $s.Images}}
     <figure>

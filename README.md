@@ -49,6 +49,16 @@ Each assembly carries an ordered list of **steps**. A step is one of:
 Steps can be reordered (↑/↓, swapping sort order), and images are stored in the
 database (capped at 10 MiB, png/jpeg/gif/webp only) and served from `/images/{id}`.
 
+A `document` step embeds a KiCad InteractiveHtmlBom file: the board is stored whole
+(capped at 32 MiB, and it must actually be an iBOM — the `pcbdata` blob has to be
+present) and served from `/documents/{id}`, shown in a sandboxed iframe on the
+manual page. Re-uploading replaces the stored board, so a re-exported layout lands
+in place. The board is served with `Content-Security-Policy: sandbox allow-scripts`,
+which puts it in an opaque origin: it can run its own scripts (it is a self-contained
+page that renders the board with JavaScript) but cannot reach the parent page or the
+network. This is the only place mise serves user-supplied markup, so the restriction
+lives on that one response rather than globally.
+
 Preview a manual as a specific build with `/manuals/{assembly_id}?build={build_id}`.
 With no build it shows the assembly's own steps with variant references unresolved
 to a selection, i.e. the slot's default.
@@ -111,6 +121,5 @@ templates/     server-rendered pages (html/template)
 
 ## Not in this phase
 
-- Embedding the iBOM itself as a step's content (phase 4) — for now a PCB's manual
-  is authored like any other, and the iBOM is a separate file.
 - PDF export (deliberately never).
+- A FreeCAD→glTF 3D viewer (nice-to-have, phase 5).
