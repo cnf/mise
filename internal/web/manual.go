@@ -64,9 +64,26 @@ func (s *Server) manualByID(w http.ResponseWriter, r *http.Request) {
 	parts, _ := store.ListParts(s.db, "")
 	all, _ := store.ListAssemblies(s.db)
 	slots, _ := store.ListSlots(s.db, id)
+	// The "view as build" control was a raw build-id input, which meant you had
+	// to know the id. Offer this assembly's builds by name instead.
+	var builds []store.Build
+	if bs, err := store.ListBuilds(s.db); err == nil {
+		for _, b := range bs {
+			if b.AssemblyID == id {
+				builds = append(builds, b)
+			}
+		}
+	}
+	selID := int64(0)
+	if bs := r.URL.Query().Get("build"); bs != "" {
+		if bid, err := strconv.ParseInt(bs, 10, 64); err == nil {
+			selID = bid
+		}
+	}
 	s.render(w, "manual_view.html", map[string]any{
 		"Assembly": a, "Manual": m, "Parts": parts, "All": all,
 		"Slots": slots, "Label": label, "BuildQuery": r.URL.Query().Get("build"),
+		"Builds": builds, "BuildSel": selID,
 		"Back":        back,
 		"Edit":        edit,
 		"NeedsViewer": m.HasModel(),

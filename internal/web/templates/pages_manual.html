@@ -1,73 +1,111 @@
 {{define "manual_view.html"}}{{template "head" .}}
-<h1>Manual: {{.Assembly.Name}}</h1>
-<p class="muted">
-  <a href="/gather/{{.Assembly.ID}}">gather list</a> ·
-  <a href="/assemblies/{{.Assembly.ID}}">assembly</a>
-  {{if .Label}} · viewing as <b>{{.Label}}</b>{{end}}
-</p>
+<div class="crumb"><a href="/assemblies">Assemblies</a> › <a href="/assemblies/{{.Assembly.ID}}">{{.Assembly.Name}}</a> › Manual</div>
+<h1>How to build {{.Assembly.Name}}</h1>
+<p class="lede">The authored procedure, in order. Steps can carry text and photos, follow a
+sub-assembly's own manual, follow whichever variant the build chose, or embed the board
+or a 3D model.</p>
 
-<div class="modebar">
-  {{if .Edit}}
-    <span class="tag mode-on">editing</span>
-    <a href="/manuals/{{.Assembly.ID}}{{if .BuildQuery}}?build={{.BuildQuery}}{{end}}"><button class="ghost" type="button">Done — read only</button></a>
-  {{else}}
-    <a href="/manuals/{{.Assembly.ID}}?edit=1{{if .BuildQuery}}&amp;build={{.BuildQuery}}{{end}}"><button class="ghost" type="button">Edit this manual</button></a>
-  {{end}}
-  <form class="inline" method="get" action="/manuals/{{.Assembly.ID}}" style="margin:0">
-    {{if .Edit}}<input type="hidden" name="edit" value="1">{{end}}
-    <label class="muted small">view as build:</label>
-    <input name="build" value="{{.BuildQuery}}" placeholder="build id" style="width:6rem">
-    <button class="ghost small">Show</button>
-    <span class="muted small">blank = this assembly only, variants unresolved</span>
-  </form>
+{{if .Edit}}<div class="modebar"><span class="tag mode-on">editing</span>
+  <span class="muted small">reorder with ↑ ↓, attach files per step · note text saves with its own button</span>
+  <span class="sp"></span>
+  <a href="/manuals/{{.Assembly.ID}}{{if .BuildQuery}}?build={{.BuildQuery}}{{end}}"><button class="ghost" type="button">Done — read only</button></a>
+</div>{{else}}<div class="modebar">
+  <span class="muted small">reading — {{len .Manual.Steps}} step{{if ne (len .Manual.Steps) 1}}s{{end}} authored</span>
+  <span class="sp"></span>
+  <a href="/manuals/{{.Assembly.ID}}?edit=1{{if .BuildQuery}}&amp;build={{.BuildQuery}}{{end}}"><button class="ghost" type="button">Edit this manual</button></a>
+</div>{{end}}
+
+{{/* Reading the manual AS a build is the point of variants: the same authored
+     steps, resolving to this build's choices. When the assembly has builds, pick
+     one by name; otherwise the id field is all there is. */}}
+{{if .Builds}}
+<form class="viewing" method="get" action="/manuals/{{.Assembly.ID}}">
+  {{if .Edit}}<input type="hidden" name="edit" value="1">{{end}}
+  <label>Viewing as</label>
+  <select name="build" onchange="this.form.submit()">
+    <option value="" {{if eq .BuildSel 0}}selected{{end}}>this assembly only — variants unresolved</option>
+    {{range .Builds}}<option value="{{.ID}}" {{if eq $.BuildSel .ID}}selected{{end}}>{{if .Name}}{{.Name}}{{else}}build #{{.ID}}{{end}}{{if .FrozenAt}} · frozen{{end}}</option>{{end}}
+  </select>
+  <noscript><button class="ghost small">Show</button></noscript>
+  {{if .Label}}<span class="tag">viewing as {{.Label}}</span>{{end}}
+</form>
+{{else if .Label}}
+<p class="muted small">viewing as <b>{{.Label}}</b> · <a href="/manuals/{{.Assembly.ID}}">clear</a></p>
+{{end}}
+
+{{if not .Edit}}
+<div class="verbs">
+  <a class="verb primary" href="/gather/{{.Assembly.ID}}">
+    <div class="vt">Gather the parts</div>
+    <div class="vd">Do this before you start — the flat pull list, grouped by which
+      sub-assembly declares each part.</div>
+    <div class="go">open gather list →</div>
+  </a>
+  <a class="verb" href="/assemblies/{{.Assembly.ID}}">
+    <div class="vt">Back to the assembly</div>
+    <div class="vd">What this thing is made of: its lines, its sub-assemblies, and its
+      variant slots.</div>
+    <div class="go">open assembly →</div>
+  </a>
 </div>
+{{end}}
 
+<h2>{{if .Manual.Title}}{{.Manual.Title}}{{else}}Steps{{end}}</h2>
 {{template "manualsteps" .Manual}}
 
 {{if .Edit}}
-<h2>Add a step</h2>
-<form method="post" action="/steps/new">
-  <input type="hidden" name="assembly_id" value="{{.Assembly.ID}}">
-  <input type="hidden" name="_back" value="{{.Manual.Back}}">
-  <div class="row"><label>Type</label>
-    <select name="item_type">
-      <option value="note">note — text + photos</option>
-      <option value="assembly">follow a sub-assembly's manual</option>
-      <option value="slot">follow whichever variant is chosen</option>
-      <option value="document">embedded board or 3D model</option>
-    </select>
+<div class="card panel">
+  <div class="hd2"><h2>Add a step</h2><span class="n">editing</span></div>
+  <div class="pad">
+  <form method="post" action="/steps/new">
+    <input type="hidden" name="assembly_id" value="{{.Assembly.ID}}">
+    <input type="hidden" name="_back" value="{{.Manual.Back}}">
+    <div class="row"><label>Type</label>
+      <select name="item_type">
+        <option value="note">note — text + photos</option>
+        <option value="assembly">follow a sub-assembly's manual</option>
+        <option value="slot">follow whichever variant is chosen</option>
+        <option value="document">embedded board or 3D model</option>
+      </select>
+    </div>
+    <div class="row"><label>Title</label><input name="title" style="width:34rem"></div>
+    <div class="row"><label>Body</label><textarea name="body"></textarea></div>
+    <div class="row"><label>Sub-assembly</label>
+      <select name="child_assembly_id" style="width:26rem">
+        <option value="">— none —</option>
+        {{range .All}}{{if ne .ID $.Assembly.ID}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+      </select>
+    </div>
+    <div class="row"><label>Slot</label>
+      <select name="slot_id" style="width:26rem">
+        <option value="">— none —</option>
+        {{range .Slots}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+      </select>
+    </div>
+    <p><button>Add step</button></p>
+  </form>
   </div>
-  <div class="row"><label>Title</label><input name="title" style="width:34rem"></div>
-  <div class="row"><label>Body</label><textarea name="body"></textarea></div>
-  <div class="row"><label>Sub-assembly</label>
-    <select name="child_assembly_id" style="width:26rem">
-      <option value="">— none —</option>
-      {{range .All}}{{if ne .ID $.Assembly.ID}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
-    </select>
-  </div>
-  <div class="row"><label>Slot</label>
-    <select name="slot_id" style="width:26rem">
-      <option value="">— none —</option>
-      {{range .Slots}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
-    </select>
-  </div>
-  <p><button>Add step</button></p>
-</form>
+</div>
 {{end}}
 {{template "foot" .}}{{end}}
 
 
 {{define "manualsteps"}}
 {{$edit := .Edit}}{{$back := .Back}}{{$aid := .AssemblyID}}
-{{if not .Steps}}<p class="muted">No steps yet.{{if not $edit}} <a href="/manuals/{{$aid}}?edit=1">Add one.</a>{{end}}</p>{{end}}
+{{if not .Steps}}<p class="muted">No steps yet.{{if not $edit}} <a href="/manuals/{{$aid}}?edit=1">Add the first one.</a>{{end}}</p>{{end}}
+<div class="steps">
 {{range $i, $s := .Steps}}
 <div class="step">
   <div class="stepnum">{{inc $i}}</div>
   <div class="stepbody">
     <div class="steptitle">
       {{if $s.Title}}{{$s.Title}}{{else}}<span class="muted">untitled</span>{{end}}
-      {{if eq $s.ItemType "assembly"}}<span class="tag">follows “{{$s.ChildName}}”</span>{{end}}
-      {{if eq $s.ItemType "slot"}}<span class="tag">variant: {{$s.SlotName}}{{if $s.ChosenLabel}} → {{$s.ChosenLabel}}{{end}}</span>{{end}}
+    </div>
+    <div class="meta">
+      {{if eq $s.ItemType "assembly"}}<span class="tag">follows ▸ {{$s.ChildName}}</span>{{end}}
+      {{if eq $s.ItemType "slot"}}<span class="tag">variant · {{$s.SlotName}}{{if $s.ChosenLabel}} → {{$s.ChosenLabel}}{{end}}</span>{{end}}
+      {{if eq $s.ItemType "document"}}<span class="tag">{{if $s.Document}}{{if $s.Document.IsModel}}3D model{{else}}board layout{{end}}{{else}}document{{end}}</span>{{end}}
+      {{if eq $s.ItemType "note"}}<span class="tag">note</span>{{end}}
     </div>
     {{if $s.Body}}<div class="steptext">{{$s.Body}}</div>{{end}}
 
@@ -90,10 +128,10 @@
         </div>
         {{end}}
         {{if $s.Document.IsModel}}
-          <p class="muted small">▸ {{$s.Document.Filename}}</p>
+          {{if not $edit}}<p class="muted small">▸ {{$s.Document.Filename}}</p>{{end}}
           <model-viewer class="model" src="/documents/{{$s.Document.ID}}" alt="{{$s.Title}}" camera-controls touch-action="pan-y" shadow-intensity="0.6" exposure="1.0"></model-viewer>
         {{else}}
-          <p class="muted small">▸ {{$s.Document.Filename}}</p>
+          {{if not $edit}}<p class="muted small">▸ {{$s.Document.Filename}}</p>{{end}}
           <iframe class="ibom" src="/documents/{{$s.Document.ID}}" sandbox="allow-scripts" loading="lazy" title="interactive board"></iframe>
         {{end}}
       {{else if $edit}}
@@ -175,4 +213,5 @@
   </div>
 </div>
 {{end}}
+</div>
 {{end}}

@@ -322,9 +322,17 @@ func TestManualTemplatesRender(t *testing.T) {
 		t.Fatalf("manual_view: %v", err)
 	}
 	out := buf.String()
-	for _, want := range []string{"Manual:", "hello", "cap", "variant:", "sub-manual", `src="/documents/`, "board.html"} {
+	// the read surface must still carry every step's content: the note, its photo
+	// caption, the variant tag, the followed sub-manual, and the embedded board
+	for _, want := range []string{"hello", "cap", "variant ·", "sub-manual", `src="/documents/`, "board.html", "How to build"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("manual page missing %q", want)
+		}
+	}
+	// and it must state the two verbs rather than being a bare list of steps
+	for _, want := range []string{"Gather the parts", "Edit this manual"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("manual page missing the %q affordance", want)
 		}
 	}
 }
