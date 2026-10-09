@@ -230,17 +230,37 @@
   <div class="hd2"><h2>Add to this assembly</h2><span class="n">editing</span></div>
   <div class="pad">
   <h3>Part</h3>
-  <form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
+  <form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}" id="addpart">
     <input type="hidden" name="_action" value="add_part">
     <input type="hidden" name="_back" value="{{.Back}}?edit=1">
-    <input list="allparts" placeholder="type to filter…" style="width:14rem">
-    <select name="part_id" style="width:26rem">
-      {{range .Parts}}<option value="{{.ID}}">{{.Name}} — {{.Kind}}</option>{{end}}
-    </select>
-    <input name="qty" value="1" style="width:5rem" title="quantity">
+    <input type="hidden" name="part_id" id="ap-id">
+    <input id="ap-q" placeholder="search {{len .Parts}} parts…" autocomplete="off" style="width:26rem" aria-label="part">
+    <input name="qty" value="1" style="width:5rem" title="quantity" aria-label="quantity">
     <button>Add part</button>
   </form>
-  <datalist id="allparts">{{range .Parts}}<option value="{{.Name}}"></option>{{end}}</datalist>
+  <div id="ap-list" class="hits" hidden>
+    {{range .Parts}}<button type="button" class="hit" data-id="{{.ID}}"><span class="hn">{{.Name}}</span><span class="hm">{{.Kind}}</span></button>{{end}}
+    <div class="hit none" id="ap-none" hidden>No part matches.</div>
+  </div>
+  <script>
+  (()=>{
+  const q=document.getElementById('ap-q'),id=document.getElementById('ap-id'),
+    list=document.getElementById('ap-list'),none=document.getElementById('ap-none'),
+    form=document.getElementById('addpart'),items=[...list.querySelectorAll('.hit[data-id]')];
+  const show=()=>{const t=q.value.trim().toLowerCase();let n=0;
+    items.forEach(b=>{const ok=!t||b.textContent.toLowerCase().includes(t);b.hidden=!ok;if(ok)n++});
+    none.hidden=n>0;list.hidden=false};
+  const pick=b=>{id.value=b.dataset.id;q.value=b.querySelector('.hn').textContent;list.hidden=true;q.setCustomValidity('')};
+  q.addEventListener('focus',show);
+  q.addEventListener('input',()=>{id.value='';q.setCustomValidity('');show()});
+  q.addEventListener('keydown',e=>{
+    if(e.key==='Enter'&&!id.value){e.preventDefault();const f=items.find(b=>!b.hidden);if(f)pick(f)}
+    if(e.key==='Escape')list.hidden=true});
+  items.forEach(b=>b.addEventListener('click',()=>pick(b)));
+  document.addEventListener('click',e=>{if(!list.contains(e.target)&&e.target!==q)list.hidden=true});
+  form.addEventListener('submit',e=>{if(!id.value){e.preventDefault();q.setCustomValidity('Pick a part from the list');q.reportValidity();q.focus();show()}});
+  })();
+  </script>
 
   <h3>Sub-assembly</h3>
   <p class="muted small">The parts inside it are pulled in when you gather, multiplied by this quantity.</p>
