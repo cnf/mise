@@ -52,7 +52,7 @@ func TestGatherRollup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	g, err := gather(db, root)
+	g, err := gather(db, root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

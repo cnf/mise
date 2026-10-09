@@ -16,15 +16,32 @@ Three levels:
 
 - **Part** — a leaf you buy or make. Global, reusable across projects.
   Optionally linked to a [Part-DB](https://part-db.de/) part (read-only).
-- **Assembly** — a node with ordered lines. A line is either a **part** (qty *n*)
-  or a **sub-assembly** (qty *n*). Recursive, arbitrarily deep.
-- **Build** — a saved release: a root assembly you freeze into an immutable
-  snapshot so a unit built from it stays reproducible.
+- **Assembly** — a node with ordered lines. A line is either a **part** (qty *n*),
+  a **sub-assembly** (qty *n*), or a **variant slot** (picks one option). Recursive,
+  arbitrarily deep.
+- **Variant slot** — a named point in an assembly where the builder picks one of
+  several alternatives: *"this frame takes PCB rev A, B or C"*. Each option is a
+  part or a sub-assembly, carries its own quantity, and one option is the default.
+- **Build** — a saved release: a root assembly plus a choice per slot, frozen into
+  an immutable snapshot so a unit built from it stays reproducible.
 
 The **gather list** is the flatten of that tree: every part, quantities summed
-through the sub-assembly multipliers, grouped by the sub-assembly that declares
-it (which bag it belongs to), DNP lines excluded. Computed on read, never stored.
-Freezing a build stores it.
+through the sub-assembly multipliers and the chosen option's quantity, grouped by
+the sub-assembly that declares it (which bag it belongs to), DNP lines excluded.
+Computed on read, never stored. Freezing a build stores it.
+
+**Variants vs versions.** Versions are the history of one node over time; variants
+are concurrent alternatives at one point. Two builds can share one assembly tree and
+differ only in which option each slot resolves to — that is what makes "the same
+hardware, but rev C" a named, reproducible thing.
+
+## Migrations
+
+`db.go` holds an ordered migration list; applied steps are recorded in a
+`migrations` table. Steps that change a CHECK constraint rebuild the table
+(SQLite cannot alter one in place), so an existing database upgrades in place
+rather than needing a reset. `TestMigrationFromPhase1` proves a phase-1 database
+keeps its rows through the upgrade.
 
 ## Running
 
@@ -76,6 +93,5 @@ templates/     server-rendered pages (html/template)
 
 ## Not in this phase
 
-Variants/slots (mixing e.g. one of several PCB revisions into a build), the
-authored assembly manual, and PDF export. See
-`/data/plans/assembly-bom-and-manual.md`.
+The authored assembly manual (BUILD mode: steps, images, recursive sub-assembly
+references) and PDF export. See `/data/plans/assembly-bom-and-manual.md`.

@@ -3,12 +3,13 @@
 <form class="inline" method="get" action="/assemblies/new"><button>New assembly</button></form>
 {{if .Rows}}
 <table>
-<tr><th>Name</th><th>Description</th><th class="num">Lines</th><th></th></tr>
+<tr><th>Name</th><th>Description</th><th class="num">Lines</th><th class="num">Slots</th><th></th></tr>
 {{range .Rows}}
 <tr>
   <td><a href="/assemblies/{{.ID}}">{{.Name}}</a></td>
   <td class="muted small">{{.Description}}</td>
   <td class="num">{{.LineCount}}</td>
+  <td class="num">{{if .SlotCount}}{{.SlotCount}}{{end}}</td>
   <td class="num"><a class="small" href="/gather/{{.ID}}">gather</a></td>
 </tr>
 {{end}}
@@ -43,10 +44,15 @@
 <tr class="{{if .DNP}}dnp{{end}}">
   <td>
     {{if eq .ItemType "part"}}<a href="/parts/{{.PartID}}">{{.PartName}}</a>
-    {{else}}<a href="/assemblies/{{.ChildAssemblyID}}">↳ {{.ChildName}}</a>{{end}}
+    {{else if eq .ItemType "assembly"}}<a href="/assemblies/{{.ChildAssemblyID}}">↳ {{.ChildName}}</a>
+    {{else}}<b>◈ {{.SlotName}}</b>{{end}}
   </td>
-  <td>{{if eq .ItemType "part"}}<span class="tag">{{.PartKind}}</span>{{else}}<span class="tag">sub-assembly</span>{{end}}</td>
+  <td>{{if eq .ItemType "part"}}<span class="tag">{{.PartKind}}</span>
+      {{else if eq .ItemType "assembly"}}<span class="tag">sub-assembly</span>
+      {{else}}<span class="tag">variant slot</span>{{end}}</td>
   <td class="num">
+    {{if eq .ItemType "slot"}}<span class="muted">—</span>
+    {{else}}
     <form method="post" action="/lines/{{.ID}}">
       <input type="hidden" name="_action" value="update">
       <input type="hidden" name="_back" value="{{$.Back}}">
@@ -54,6 +60,7 @@
       <label class="small muted"><input type="checkbox" name="dnp" {{if .DNP}}checked{{end}}> DNP</label>
       <button class="ghost">set</button>
     </form>
+    {{end}}
   </td>
   <td class="num">{{if .UnitPrice}}{{mul .UnitPrice .Qty}} {{.Currency}}{{end}}</td>
   <td class="small muted">{{.Notes}}</td>
@@ -65,6 +72,53 @@
     </form>
   </td>
 </tr>
+{{if eq .ItemType "slot"}}
+<tr><td colspan="6" style="padding-top:0">
+  <table style="margin:0">
+  <tr><th>Option</th><th>Target</th><th class="num">Qty</th><th>Notes</th><th></th></tr>
+  {{range .Options}}
+  <tr>
+    <td>{{if .IsDefault}}<span class="tag">default</span> {{end}}{{.Label}}</td>
+    <td class="small">{{if eq .TargetType "part"}}<a href="/parts/{{.PartID}}">{{.PartName}}</a>{{else}}<a href="/assemblies/{{.ChildAssemblyID}}">↳ {{.ChildName}}</a>{{end}}</td>
+    <td class="num">{{trimNum .Qty}}</td>
+    <td class="small muted">{{.Notes}}</td>
+    <td class="num">
+      <form method="post" action="/options/{{.ID}}">
+        <input type="hidden" name="_action" value="delete">
+        <input type="hidden" name="_back" value="{{$.Back}}">
+        <button class="danger">×</button>
+      </form>
+    </td>
+  </tr>
+  {{end}}
+  {{if not .Options}}<tr><td colspan="5" class="muted small">No options yet — add one below.</td></tr>{{end}}
+  </table>
+  <form class="inline" method="post" action="/slots/{{.SlotID}}">
+    <input type="hidden" name="_action" value="add_option">
+    <input type="hidden" name="_back" value="{{$.Back}}">
+    <input name="label" placeholder="label (e.g. rev C)" style="width:9rem">
+    <select name="target_type" style="width:9rem">
+      <option value="assembly">sub-assembly</option>
+      <option value="part">part</option>
+    </select>
+    <select name="child_assembly_id" style="width:18rem">
+      {{range $.All}}{{if ne .ID $.Assembly.ID}}<option value="{{.ID}}">↳ {{.Name}}</option>{{end}}{{end}}
+    </select>
+    <select name="part_id" style="width:18rem">
+      {{range $.Parts}}<option value="{{.ID}}">{{.Name}}</option>{{end}}
+    </select>
+    <input name="qty" value="1" style="width:4.5rem" title="qty of the option">
+    <input name="notes" placeholder="compatibility note" style="width:14rem">
+    <label class="small muted"><input type="checkbox" name="is_default"> default</label>
+    <button class="ghost">Add option</button>
+  </form>
+  <form method="post" action="/slots/{{.SlotID}}" onsubmit="return confirm('Delete this slot and all its options?')">
+    <input type="hidden" name="_action" value="delete">
+    <input type="hidden" name="_back" value="{{$.Back}}">
+    <button class="danger">Delete slot</button>
+  </form>
+</td></tr>
+{{end}}
 {{end}}
 </table>
 {{else}}<p class="muted">Empty.</p>{{end}}
@@ -72,7 +126,7 @@
 <h2>Add part</h2>
 <form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
   <input type="hidden" name="_action" value="add_part">
-  <input list="allparts" name="part_search" placeholder="type to filter…" style="width:16rem">
+  <input list="allparts" placeholder="type to filter…" style="width:14rem">
   <select name="part_id" style="width:26rem">
     {{range .Parts}}<option value="{{.ID}}">{{.Name}} — {{.Kind}}</option>{{end}}
   </select>
@@ -91,6 +145,17 @@
   <button>Add</button>
 </form>
 
+<h2>Add variant slot</h2>
+<p class="muted small">A slot is a point where the builder picks one of several
+alternatives — “this frame takes PCB rev A, B or C”. Options are added to the slot
+after it exists.</p>
+<form class="inline" method="post" action="/assemblies/{{.Assembly.ID}}">
+  <input type="hidden" name="_action" value="add_slot">
+  <input name="slot_name" placeholder="slot name (e.g. PCB)" style="width:16rem" required>
+  <input name="slot_notes" placeholder="compatibility note shown on the gather list" style="width:26rem">
+  <button>Add slot</button>
+</form>
+
 <form method="post" action="/assemblies/{{.Assembly.ID}}" onsubmit="return confirm('Delete this assembly and its lines?')">
   <input type="hidden" name="_action" value="delete">
   <button class="danger">Delete assembly</button>
@@ -101,15 +166,35 @@
 {{define "gather.html"}}{{template "head" .}}
 <h1>Gather: {{.Gather.RootName}}</h1>
 <p><a class="small" href="/export/gather/{{.Gather.RootID}}">download CSV</a></p>
-{{if .Gather.Errors}}<p class="err small">{{range .Gather.Errors}}{{.}}<br>{{end}}</p>{{end}}
+{{template "gatherbody" .Gather}}
+{{template "foot" .}}{{end}}
 
-{{range .Gather.Groups}}
+
+{{define "gatherbody"}}
+{{if .Errors}}<p class="err small">{{range .Errors}}{{.}}<br>{{end}}</p>{{end}}
+
+{{if .Slots}}
+<h2>Variants used</h2>
+<table>
+<tr><th>Slot</th><th>Choice</th><th>Resolves to</th><th>Note</th></tr>
+{{range .Slots}}
+<tr class="{{if .Unresolved}}err{{end}}">
+  <td>{{.SlotName}} <span class="muted small">in {{.Assembly}}</span></td>
+  <td>{{if .Unresolved}}<span class="err">unresolved</span>{{else if .IsDefault}}{{.Label}} <span class="tag">default</span>{{else}}{{.Label}}{{end}}</td>
+  <td class="muted small">{{.Target}}</td>
+  <td class="small warn">{{.Note}}</td>
+</tr>
+{{end}}
+</table>
+{{end}}
+
+{{range .Groups}}
 <h2>{{.AssemblyName}}</h2>
 <table>
-<tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Line</th><th class="num">total</th></tr>
+<tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">total</th></tr>
 {{range .Lines}}
 <tr>
-  <td>{{if .PartDBID}}<a href="/parts/{{.PartID}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
+  <td>{{.Name}}</td>
   <td><span class="tag">{{.Kind}}</span></td>
   <td class="num">{{trimNum .Qty}}</td>
   <td class="num">{{price .UnitPrice}}</td>
@@ -121,8 +206,8 @@
 
 <h2>Total</h2>
 <table>
-<tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Line</th><th class="num">total</th></tr>
-{{range .Gather.Total}}
+<tr><th>Part</th><th>Kind</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">total</th></tr>
+{{range .Total}}
 <tr>
   <td>{{.Name}}</td><td><span class="tag">{{.Kind}}</span></td>
   <td class="num">{{trimNum .Qty}}</td>
@@ -132,14 +217,15 @@
 {{end}}
 </table>
 <p class="muted">
-{{range $cur, $sum := .Gather.TotalCost}}<b>{{printf "%.2f" $sum}} {{$cur}}</b> {{end}}
+{{range $cur, $sum := .TotalCost}}<b>{{printf "%.2f" $sum}} {{$cur}}</b> {{end}}
 </p>
-{{template "foot" .}}{{end}}
+{{end}}
 
 
 {{define "builds.html"}}{{template "head" .}}
 <h1>Builds</h1>
-<p class="muted small">A build is the frozen answer to “assemble this one: what do I need”. Freeze it and the list stops moving.</p>
+<p class="muted small">A build is the frozen answer to “assemble this one: what do I need”.
+Pick your variants, freeze it, and the list stops moving.</p>
 {{if .Builds}}
 <table>
 <tr><th>#</th><th>Name</th><th>Assembly</th><th>Frozen</th></tr>
@@ -170,30 +256,60 @@
 <p class="muted">root assembly: <a href="/assemblies/{{.Assembly.ID}}">{{.Assembly.Name}}</a>
 {{if .Build.FrozenAt}} · <span class="ok">frozen {{.Build.FrozenAt}}</span>{{end}}</p>
 
-<form method="post" action="/builds/{{.Build.ID}}">
-  <input type="hidden" name="_action" value="freeze">
-  <button>{{if .Build.FrozenAt}}Re-freeze{{else}}Freeze{{end}}</button>
-</form>
-<p><a class="small" href="/export/gather/{{.Assembly.ID}}">download CSV</a></p>
-
-<h2>Gather list (live)</h2>
-{{template "gathertable" .Gather}}
-{{if .Frozen}}
-<h2>Frozen snapshot</h2>
-<p class="muted small">This is what the list was when frozen — kept pristine so a built unit can be reproduced exactly.</p>
-{{template "gathertable" .Frozen}}
-{{end}}
-{{template "foot" .}}{{end}}
-
-
-{{define "gathertable"}}
-{{range .Groups}}
+{{if .SlotViews}}
+<h2>Variants</h2>
+<p class="muted small">Choose which alternative this build uses. Unset slots fall back
+to the option marked default. These choices are stored on the build, so another build
+can use the same hardware with a different variant.</p>
 <table>
-<tr><th>{{.AssemblyName}}</th><th class="num">Qty</th></tr>
-{{range .Lines}}<tr><td>{{.Name}}</td><td class="num">{{trimNum .Qty}}</td></tr>{{end}}
+<tr><th>Slot</th><th>In</th><th>Choice</th><th>Resolves to</th></tr>
+{{range .SlotViews}}
+<tr>
+  <td>{{.Slot.Name}}</td>
+  <td class="muted small">{{.Slot.Notes}}</td>
+  <td>
+    <form method="post" action="/builds/select/{{$.Build.ID}}" style="margin:0">
+      <input type="hidden" name="slot_id" value="{{.Slot.ID}}">
+      <select name="option_id" onchange="this.form.submit()">
+        <option value="" {{if eq .Selected 0}}selected{{end}}>— slot default —</option>
+        {{$sel := .Selected}}
+        {{range .Options}}
+        <option value="{{.ID}}" {{if eq $sel .ID}}selected{{end}}>
+          {{.Label}} → {{.TargetName}}{{if .IsDefault}} (default){{end}}
+        </option>
+        {{end}}
+      </select>
+    </form>
+  </td>
+  <td class="muted small">{{$sel := .Selected}}{{range .Options}}{{if eq $sel .ID}}{{.Notes}}{{end}}{{end}}</td>
+</tr>
+{{end}}
 </table>
 {{end}}
+
+<form method="post" action="/builds/{{.Build.ID}}">
+  <input type="hidden" name="_action" value="freeze">
+  <button>{{if .Build.FrozenAt}}Re-freeze{{else}}Freeze this build{{end}}</button>
+</form>
+
+<p><a class="small" href="/export/gather/{{.Assembly.ID}}">download live CSV</a>
+{{if .Build.FrozenAt}} · <a class="small" href="/export/snapshot/{{.Build.ID}}">download frozen CSV</a>{{end}}</p>
+
+<h2>Gather list (live)</h2>
+{{template "gatherbody" .Gather}}
+
+{{if .Frozen}}
+<h2>Frozen snapshot</h2>
+<p class="muted small">Kept pristine, so a unit built from this build can be
+reproduced exactly even after the assemblies change.</p>
+{{template "gatherbody" .Frozen}}
 {{end}}
+
+<form method="post" action="/builds/{{.Build.ID}}" onsubmit="return confirm('Delete this build?')">
+  <input type="hidden" name="_action" value="delete">
+  <button class="danger">Delete build</button>
+</form>
+{{template "foot" .}}{{end}}
 
 
 {{define "ibom_import.html"}}{{template "head" .}}

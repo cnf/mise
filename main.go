@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -54,10 +55,14 @@ func main() {
 	mux.HandleFunc("/assemblies/new", s.assemblyNew)
 	mux.HandleFunc("/assemblies/", s.assemblyByID)
 	mux.HandleFunc("/lines/", s.lineByID)
+	mux.HandleFunc("/slots/", s.slotByID)
+	mux.HandleFunc("/options/", s.optionByID)
 	mux.HandleFunc("/builds", s.builds)
 	mux.HandleFunc("/builds/", s.buildByID)
+	mux.HandleFunc("/builds/select/", s.buildSelect)
 	mux.HandleFunc("/gather/", s.gatherPage)
 	mux.HandleFunc("/export/gather/", s.exportCSV)
+	mux.HandleFunc("/export/snapshot/", s.exportSnapshotCSV)
 	mux.HandleFunc("/partdb/sync", s.partdbSync)
 	mux.HandleFunc("/api/partdb/search", s.partdbSearchAPI)
 	mux.HandleFunc("/ibom/import", s.ibomImport)
@@ -159,15 +164,13 @@ func (s *server) partByID(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "part_edit.html", map[string]any{"Part": p, "Kinds": partKinds})
 		return
 	}
-	if r.Method == http.MethodPost {
-		if r.FormValue("_action") == "delete" {
-			if err := deletePart(s.db, id); err != nil {
-				http.Error(w, err.Error(), 409)
-				return
-			}
-			http.Redirect(w, r, "/parts", http.StatusSeeOther)
+	if r.Method == http.MethodPost && r.FormValue("_action") == "delete" {
+		if err := deletePart(s.db, id); err != nil {
+			http.Error(w, err.Error(), 409)
 			return
 		}
+		http.Redirect(w, r, "/parts", http.StatusSeeOther)
+		return
 	}
 	s.render(w, "part_view.html", map[string]any{"Part": p, "Kinds": partKinds})
 }
@@ -180,16 +183,17 @@ func (s *server) assemblies(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	// count direct lines for display
 	type row struct {
 		Assembly
 		LineCount int
+		SlotCount int
 	}
 	rows := make([]row, 0, len(asms))
 	for _, a := range asms {
-		var n int
+		var n, sl int
 		_ = s.db.QueryRow(`SELECT COUNT(*) FROM assembly_line WHERE assembly_id=?`, a.ID).Scan(&n)
-		rows = append(rows, row{a, n})
+		_ = s.db.QueryRow(`SELECT COUNT(*) FROM variant_slot WHERE assembly_id=?`, a.ID).Scan(&sl)
+		rows = append(rows, row{a, n, sl})
 	}
 	s.render(w, "assemblies.html", map[string]any{"Rows": rows})
 }
@@ -262,7 +266,7 @@ func (s *server) assemblyByID(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), 400)
 			return
 		}
-		var err error
+		var opErr error
 		switch r.FormValue("_action") {
 		case "add_part":
 			pid := parseOptInt(r.FormValue("part_id"))
@@ -270,7 +274,7 @@ func (s *server) assemblyByID(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "part required", 400)
 				return
 			}
-			_, err = addLine(s.db, &Line{AssemblyID: id, ItemType: "part", PartID: pid, Qty: orFloat(r.FormValue("qty"), 1)})
+			_, opErr = addLine(s.db, &Line{AssemblyID: id, ItemType: "part", PartID: pid, Qty: orFloat(r.FormValue("qty"), 1)})
 		case "add_sub":
 			cid := parseOptInt(r.FormValue("child_assembly_id"))
 			if cid == nil {
@@ -281,21 +285,33 @@ func (s *server) assemblyByID(w http.ResponseWriter, r *http.Request) {
 				http.Error(w, "cannot add an assembly to itself", 400)
 				return
 			}
-			if err = wouldCycle(s.db, id, *cid); err != nil {
-				http.Error(w, err.Error(), 400)
+			if opErr = wouldCycle(s.db, id, *cid); opErr != nil {
+				http.Error(w, opErr.Error(), 400)
 				return
 			}
-			_, err = addLine(s.db, &Line{AssemblyID: id, ItemType: "assembly", ChildAssemblyID: cid, Qty: orFloat(r.FormValue("qty"), 1)})
+			_, opErr = addLine(s.db, &Line{AssemblyID: id, ItemType: "assembly", ChildAssemblyID: cid, Qty: orFloat(r.FormValue("qty"), 1)})
+		case "add_slot":
+			name := strings.TrimSpace(r.FormValue("slot_name"))
+			if name == "" {
+				http.Error(w, "slot name required", 400)
+				return
+			}
+			sid, e := addSlot(s.db, &VariantSlot{AssemblyID: id, Name: name, Notes: r.FormValue("slot_notes")})
+			if e != nil {
+				http.Error(w, e.Error(), 500)
+				return
+			}
+			_, opErr = addLine(s.db, &Line{AssemblyID: id, ItemType: "slot", SlotID: &sid, Qty: 1, Notes: r.FormValue("slot_notes")})
 		case "delete":
-			if err = deleteAssembly(s.db, id); err != nil {
-				http.Error(w, err.Error(), 409)
+			if opErr = deleteAssembly(s.db, id); opErr != nil {
+				http.Error(w, opErr.Error(), 409)
 				return
 			}
 			http.Redirect(w, r, "/assemblies", http.StatusSeeOther)
 			return
 		}
-		if err != nil {
-			http.Error(w, err.Error(), 500)
+		if opErr != nil {
+			http.Error(w, opErr.Error(), 500)
 			return
 		}
 		http.Redirect(w, r, "/assemblies/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
@@ -319,8 +335,11 @@ func (s *server) lineByID(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	var id int64
-	fmt.Sscanf(strings.Trim(strings.TrimPrefix(r.URL.Path, "/lines/"), "/"), "%d", &id)
+	id, err := idTail(r.URL.Path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), 400)
 		return
@@ -334,6 +353,96 @@ func (s *server) lineByID(w http.ResponseWriter, r *http.Request) {
 		}
 	case "update":
 		if err := updateLineQty(s.db, id, orFloat(r.FormValue("qty"), 1), r.FormValue("dnp") != ""); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
+}
+
+func (s *server) slotByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	id, err := idFromPath(r.URL.Path, "/slots/")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	_ = r.ParseForm()
+	back := orDefault(r.FormValue("_back"), "/")
+	switch r.FormValue("_action") {
+	case "add_option":
+		o := &Option{
+			SlotID:     id,
+			Label:      strings.TrimSpace(r.FormValue("label")),
+			TargetType: r.FormValue("target_type"),
+			Qty:        orFloat(r.FormValue("qty"), 1),
+			Notes:      r.FormValue("notes"),
+			IsDefault:  r.FormValue("is_default") != "",
+		}
+		if o.Label == "" {
+			http.Error(w, "label required", 400)
+			return
+		}
+		sl, err := getSlot(s.db, id)
+		if err != nil || sl == nil {
+			http.NotFound(w, r)
+			return
+		}
+		switch o.TargetType {
+		case "part":
+			o.PartID = parseOptInt(r.FormValue("part_id"))
+			if o.PartID == nil {
+				http.Error(w, "pick a part for the option", 400)
+				return
+			}
+		case "assembly":
+			o.ChildAssemblyID = parseOptInt(r.FormValue("child_assembly_id"))
+			if o.ChildAssemblyID == nil {
+				http.Error(w, "pick an assembly for the option", 400)
+				return
+			}
+			if *o.ChildAssemblyID == sl.AssemblyID {
+				http.Error(w, "an option cannot be its own assembly", 400)
+				return
+			}
+			if err := wouldCycle(s.db, sl.AssemblyID, *o.ChildAssemblyID); err != nil {
+				http.Error(w, err.Error(), 400)
+				return
+			}
+		default:
+			http.Error(w, "target_type must be part or assembly", 400)
+			return
+		}
+		if _, err := addOption(s.db, o); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	case "delete":
+		if err := deleteSlot(s.db, id); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+	}
+	http.Redirect(w, r, back, http.StatusSeeOther)
+}
+
+func (s *server) optionByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	id, err := idFromPath(r.URL.Path, "/options/")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	_ = r.ParseForm()
+	back := orDefault(r.FormValue("_back"), "/")
+	if r.FormValue("_action") == "delete" {
+		if err := deleteOption(s.db, id); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
@@ -383,20 +492,37 @@ func (s *server) buildByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost {
-		if r.FormValue("_action") == "freeze" {
-			if err := freezeBuild(s.db, id); err != nil {
-				http.Error(w, err.Error(), 500)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		var opErr error
+		switch r.FormValue("_action") {
+		case "freeze":
+			opErr = freezeBuild(s.db, id)
+		case "rename":
+			b.Name = r.FormValue("name")
+			_, opErr = upsertBuild(s.db, b)
+		case "delete":
+			if opErr = deleteBuild(s.db, id); opErr == nil {
+				http.Redirect(w, r, "/builds", http.StatusSeeOther)
 				return
 			}
+		}
+		if opErr != nil {
+			http.Error(w, opErr.Error(), 400)
+			return
 		}
 		http.Redirect(w, r, "/builds/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 		return
 	}
-	g, err := gather(s.db, b.AssemblyID)
+	sel := parseSelection(b.Selections)
+	g, err := gather(s.db, b.AssemblyID, sel)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	g.Selection = sel
 	a, _ := getAssembly(s.db, b.AssemblyID)
 	var snap *GatherResult
 	if b.Snapshot != nil {
@@ -405,10 +531,78 @@ func (s *server) buildByID(w http.ResponseWriter, r *http.Request) {
 			snap = &sr
 		}
 	}
+	// slots reachable from this build's root, with their options and the
+	// build's current choice, ready for the picker
+	slots, err := slotsUnder(s.db, b.AssemblyID)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	type slotView struct {
+		Slot     VariantSlot
+		Options  []Option
+		Selected int64 // chosen option id, 0 = use the slot default
+	}
+	views := make([]slotView, 0, len(slots))
+	for _, sl := range slots {
+		opts, err := optionsForSlot(s.db, sl.ID)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		v := slotView{Slot: sl, Options: opts}
+		if oid, ok := sel[sl.ID]; ok {
+			v.Selected = oid
+		}
+		views = append(views, v)
+	}
 	s.render(w, "build_view.html", map[string]any{
 		"Build": b, "Gather": g, "Assembly": a, "Snapshot": snap,
-		"Frozen": snap,
+		"Frozen": snap, "Sel": sel, "SlotViews": views,
+		"Stale": snap != nil && !sameSnapshot(g, snap),
 	})
+}
+
+// buildSelect records a slot choice on a build. Choices are per-build, which is
+// what makes "the same hardware, PCB rev B" a named, reproducible thing.
+func (s *server) buildSelect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	bid, err := idFromPath(r.URL.Path, "/builds/select/")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	b, err := getBuild(s.db, bid)
+	if err != nil || b == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	sel := parseSelection(b.Selections)
+	slotID := parseOptInt(r.FormValue("slot_id"))
+	optID := parseOptInt(r.FormValue("option_id"))
+	if slotID == nil {
+		http.Error(w, "slot required", 400)
+		return
+	}
+	if optID == nil || r.FormValue("option_id") == "" {
+		delete(sel, *slotID) // back to the slot's default
+	} else if err := sel.Set(s.db, *slotID, *optID); err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	b.Selections = sel.JSON()
+	if _, err := upsertBuild(s.db, b); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	http.Redirect(w, r, "/builds/"+strconv.FormatInt(bid, 10), http.StatusSeeOther)
 }
 
 func (s *server) gatherPage(w http.ResponseWriter, r *http.Request) {
@@ -417,12 +611,45 @@ func (s *server) gatherPage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	g, err := gather(s.db, id)
+	g, err := gather(s.db, id, nil)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	s.render(w, "gather.html", map[string]any{"Gather": g})
+}
+
+// ---------- export ----------
+
+// csvRows is the shared shape of the distributor CSV: one row per part with the
+// sub-assemblies it belongs to in the Customer Reference column.
+func csvRows(g *GatherResult) [][]string {
+	bags := map[int64][]string{}
+	for _, grp := range g.Groups {
+		for _, l := range grp.Lines {
+			bags[l.PartID] = append(bags[l.PartID], grp.AssemblyName)
+		}
+	}
+	rows := [][]string{{"Manufacturer Part Number", "Manufacturer", "Description", "Quantity", "Customer Reference", "Unit Price", "Currency", "Vendor URL"}}
+	for _, p := range g.Total {
+		price := ""
+		if p.UnitPrice != nil {
+			price = strconv.FormatFloat(*p.UnitPrice, 'f', -1, 64)
+		}
+		rows = append(rows, []string{"", "", p.Name, trimNum(p.Qty), strings.Join(bags[p.PartID], ", "), price, p.Currency, p.VendorURL})
+	}
+	return rows
+}
+
+func writeCSV(w http.ResponseWriter, filename string, rows [][]string) {
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF}) // BOM so Excel opens it cleanly
+	cw := csv.NewWriter(w)
+	for _, r := range rows {
+		_ = cw.Write(r)
+	}
+	cw.Flush()
 }
 
 func (s *server) exportCSV(w http.ResponseWriter, r *http.Request) {
@@ -431,35 +658,45 @@ func (s *server) exportCSV(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	g, err := gather(s.db, id)
+	g, err := gather(s.db, id, nil)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", "bom-"+sanitizeFile(g.RootName)+".csv"))
-	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF}) // BOM so Excel opens it cleanly
-
-	// A part can be declared in several sub-assemblies; list them all so the
-	// Customer Reference column tells the builder which bag/tray it belongs to.
-	bags := map[int64][]string{}
-	for _, grp := range g.Groups {
-		for _, l := range grp.Lines {
-			bags[l.PartID] = append(bags[l.PartID], grp.AssemblyName)
-		}
-	}
-
-	cw := csv.NewWriter(w)
-	_ = cw.Write([]string{"Manufacturer Part Number", "Manufacturer", "Description", "Quantity", "Customer Reference", "Unit Price", "Currency", "Vendor URL"})
-	for _, p := range g.Total {
-		price := ""
-		if p.UnitPrice != nil {
-			price = strconv.FormatFloat(*p.UnitPrice, 'f', -1, 64)
-		}
-		_ = cw.Write([]string{"", "", p.Name, trimNum(p.Qty), strings.Join(bags[p.PartID], ", "), price, p.Currency, p.VendorURL})
-	}
-	cw.Flush()
+	writeCSV(w, "bom-"+sanitizeFile(g.RootName)+".csv", csvRows(g))
 }
+
+// exportSnapshotCSV exports exactly what the build was frozen with, which is
+// the point of freezing: a built unit can be reproduced from this file even
+// after the assemblies have moved on.
+func (s *server) exportSnapshotCSV(w http.ResponseWriter, r *http.Request) {
+	id, err := idFromPath(r.URL.Path, "/export/snapshot/")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	b, err := getBuild(s.db, id)
+	if err != nil || b == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if b.Snapshot == nil {
+		http.Error(w, "build has not been frozen yet", 409)
+		return
+	}
+	var g GatherResult
+	if err := json.Unmarshal([]byte(*b.Snapshot), &g); err != nil {
+		http.Error(w, "corrupt snapshot: "+err.Error(), 500)
+		return
+	}
+	name := b.Name
+	if name == "" {
+		name = fmt.Sprintf("build-%d", b.ID)
+	}
+	writeCSV(w, "bom-frozen-"+sanitizeFile(name)+".csv", csvRows(&g))
+}
+
+// ---------- part-db / ibom ----------
 
 func (s *server) partdbSync(w http.ResponseWriter, r *http.Request) {
 	n, err := syncPartDB(s.db)
@@ -492,7 +729,7 @@ func (s *server) ibomImport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer f.Close()
-		name := orDefault(r.FormValue("assembly_name"), "PCB")
+		name := r.FormValue("assembly_name")
 		id, n, err := importIBOM(s.db, f, name)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
@@ -506,12 +743,89 @@ func (s *server) ibomImport(w http.ResponseWriter, r *http.Request) {
 
 // ---------- helpers ----------
 
+// slotsUnder returns every slot reachable from an assembly by walking both
+// sub-assembly lines and slot options, deduplicated, in tree order. The build
+// view needs the whole reachable set, not just the root's own slots.
+func slotsUnder(db *sql.DB, rootID int64) ([]VariantSlot, error) {
+	var out []VariantSlot
+	seenAsm := map[int64]bool{}
+	seenSlot := map[int64]bool{}
+
+	var walk func(id int64, depth int)
+	walk = func(id int64, depth int) {
+		if depth > 32 || seenAsm[id] {
+			return
+		}
+		seenAsm[id] = true
+
+		own, err := listSlots(db, id)
+		if err == nil {
+			for _, s := range own {
+				if !seenSlot[s.ID] {
+					seenSlot[s.ID] = true
+					out = append(out, s)
+				}
+			}
+		}
+		ls, err := lines(db, id)
+		if err != nil {
+			return
+		}
+		for _, l := range ls {
+			switch l.ItemType {
+			case "assembly":
+				if l.ChildAssemblyID != nil {
+					walk(*l.ChildAssemblyID, depth+1)
+				}
+			case "slot":
+				for _, o := range l.Options {
+					if o.TargetType == "assembly" && o.ChildAssemblyID != nil {
+						walk(*o.ChildAssemblyID, depth+1)
+					}
+				}
+			}
+		}
+	}
+	walk(rootID, 0)
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+// sameSnapshot reports whether the live gather matches the frozen one for the
+// parts that matter. A build whose assembly has been edited since freezing
+// should say so rather than silently showing two different lists.
+func sameSnapshot(live, frozen *GatherResult) bool {
+	if live == nil || frozen == nil {
+		return true
+	}
+	q := map[int64]float64{}
+	for _, p := range frozen.Total {
+		q[p.PartID] = p.Qty
+	}
+	if len(q) != len(live.Total) {
+		return false
+	}
+	for _, p := range live.Total {
+		if got, ok := q[p.PartID]; !ok || got != p.Qty {
+			return false
+		}
+	}
+	return true
+}
+
 func idFromPath(path, prefix string) (int64, error) {
 	rest := strings.Trim(strings.TrimPrefix(path, prefix), "/")
 	if i := strings.Index(rest, "/"); i >= 0 {
 		rest = rest[:i]
 	}
 	return strconv.ParseInt(rest, 10, 64)
+}
+
+// idTail parses the trailing integer of a path, tolerating a trailing slash.
+func idTail(path string) (int64, error) {
+	path = strings.Trim(path, "/")
+	i := strings.LastIndex(path, "/")
+	return strconv.ParseInt(path[i+1:], 10, 64)
 }
 
 func orDefault(s, d string) string {
@@ -585,8 +899,49 @@ func sanitizeFile(s string) string {
 	}, s)
 }
 
+// wouldCycle reports whether adding child under parent would create a cycle.
+// Slot options that point at assemblies count as edges too, so a cycle can
+// never be introduced through a variant.
+//
+// Children are collected and the cursor closed before recursing: holding a
+// result set open across a nested query on the same connection fails on some
+// drivers, and the failure would look like "no children", silently disabling
+// the guard for anything below the first level.
 func wouldCycle(db *sql.DB, parent, child int64) error {
 	seen := map[int64]bool{}
+
+	var childrenOf func(id int64) []int64
+	childrenOf = func(id int64) []int64 {
+		var out []int64
+		rows, err := db.Query(`SELECT child_assembly_id FROM assembly_line
+			WHERE assembly_id=? AND item_type='assembly' AND child_assembly_id IS NOT NULL`, id)
+		if err != nil {
+			return out
+		}
+		for rows.Next() {
+			var c int64
+			if rows.Scan(&c) == nil {
+				out = append(out, c)
+			}
+		}
+		rows.Close()
+
+		orows, err := db.Query(`SELECT o.child_assembly_id FROM variant_option o
+			JOIN variant_slot s ON s.id = o.slot_id
+			WHERE s.assembly_id=? AND o.target_type='assembly' AND o.child_assembly_id IS NOT NULL`, id)
+		if err != nil {
+			return out
+		}
+		for orows.Next() {
+			var c int64
+			if orows.Scan(&c) == nil {
+				out = append(out, c)
+			}
+		}
+		orows.Close()
+		return out
+	}
+
 	var walk func(id int64, depth int) bool
 	walk = func(id int64, depth int) bool {
 		if id == parent {
@@ -596,14 +951,8 @@ func wouldCycle(db *sql.DB, parent, child int64) error {
 			return false
 		}
 		seen[id] = true
-		rows, err := db.Query(`SELECT child_assembly_id FROM assembly_line WHERE assembly_id=? AND item_type='assembly' AND child_assembly_id IS NOT NULL`, id)
-		if err != nil {
-			return false
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var c int64
-			if rows.Scan(&c) == nil && walk(c, depth+1) {
+		for _, c := range childrenOf(id) {
+			if walk(c, depth+1) {
 				return true
 			}
 		}
